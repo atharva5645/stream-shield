@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+  
+  .bg-img-gradient::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(53, 37, 205, 0.8) 0%, rgba(11, 28, 48, 0.9) 100%);
+    z-index: 1;
+  }
+}
+
+/* Custom Input Focus Ring overriding default Tailwind forms */
+input:focus, select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+  border-color: #3525cd !important;
+}
+
+body {
+  @apply bg-surface font-body-md text-body-md text-on-surface antialiased min-h-screen;
+}
