@@ -1,10 +1,11 @@
 import React from 'react';
 import DashboardLayout from './DashboardLayout';
-import { Home, Users, Building, ShieldAlert, Settings, Activity } from 'lucide-react';
+import { Home, Users, Building, ShieldAlert, Settings, Activity, BarChart3 } from 'lucide-react';
 
 const AdminLayout = () => {
   const navigationParams = [
     { name: 'Dashboard', path: '/admin/dashboard', icon: Home },
+    { name: 'Analytics', path: '/admin/analytics', icon: BarChart3 },
     { name: 'Video Processing', path: '/admin/processing', icon: Activity },
     { name: 'Manage Users', path: '/admin/users', icon: Users },
     { name: 'Manage Tenants', path: '/admin/tenants', icon: Building },

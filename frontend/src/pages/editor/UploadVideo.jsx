@@ -1,129 +1,84 @@
 import React, { useState } from 'react';
-import { Upload, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, Info, WandSparkles } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import BackButton from '../../components/common/BackButton';
+import UploadDropzone from '../../components/upload/UploadDropzone';
+import UploadQueue from '../../components/upload/UploadQueue';
+import ValidationAlert from '../../components/upload/ValidationAlert';
+import useVideoValidation from '../../hooks/useVideoValidation';
+import useUploadQueue from '../../hooks/useUploadQueue';
 
 const UploadVideo = () => {
-  const [dragActive, setDragActive] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [file, setFile] = useState(null);
-  const [title, setTitle] = useState('');
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [validationAlerts, setValidationAlerts] = useState([]);
   const { role } = useAuth();
+  const { limits, validateFiles } = useVideoValidation();
+  const { queue, stats, addFiles, updateTitle, cancelUpload, retryUpload, removeFile, clearCompleted } = useUploadQueue();
+
+  const handleFilesSelected = async (files) => {
+    const { accepted, rejected } = await validateFiles(files);
+
+    if (rejected.length) {
+      setValidationAlerts((currentAlerts) => [...rejected, ...currentAlerts].slice(0, 6));
+    }
+
+    if (accepted.length) {
+      addFiles(accepted);
+    }
+  };
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="mx-auto max-w-6xl space-y-6">
       <BackButton to={`/${role}/dashboard`} label="Back to Dashboard" />
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Upload Video</h2>
-      
-      <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 shadow-sm">
-        {showSuccess ? (
-          <div className="text-center py-8">
-            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Video Uploaded Successfully!</h3>
-            <p className="text-gray-500 mb-6">Your video "{title}" has been added to your dashboard.</p>
-            <button
-              onClick={() => {
-                setShowSuccess(false);
-                setTitle('');
-                setFile(null);
-              }}
-              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium"
-            >
-              Upload Another Video
-            </button>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">
+            <WandSparkles size={14} />
+            Editor workspace
           </div>
-        ) : (
-          <form className="space-y-6" onSubmit={(e) => { 
-            e.preventDefault(); 
-            if (!file) return alert('Please select a video file to upload.');
-            setIsUploading(true); 
-            setTimeout(() => {
-              setIsUploading(false);
-              setShowSuccess(true);
-              
-              const existingVideos = JSON.parse(localStorage.getItem('mockVideos') || '[]');
-              const newVideo = {
-                id: Math.random().toString(36).substr(2, 9),
-                title,
-                fileName: file.name,
-                size: file.size,
-                date: new Date().toISOString(),
-                status: 'Processed', // Changed to Processed to allow instant playback
-                videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4' // Mock video url
-              };
-              localStorage.setItem('mockVideos', JSON.stringify([...existingVideos, newVideo]));
-            }, 2000); 
-          }}>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 block">Video Title *</label>
-            <input 
-              type="text" 
-              placeholder="Enter video title" 
-              required
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
-            />
-          </div>
+          <h2 className="mt-3 text-3xl font-bold text-slate-950">Upload Video</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+            This upload experience uses a mocked Axios transport layer for now so we can ship the full queue UI, progress tracking, cancellation, retry, and local thumbnail workflow before the backend ingest endpoint is ready.
+          </p>
+        </div>
 
-          <div 
-            className={`relative border-2 border-dashed rounded-xl p-12 flex flex-col items-center justify-center text-center transition-all duration-200 cursor-pointer ${dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 bg-gray-50 hover:bg-gray-100 hover:border-gray-400'}`}
-            onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
-            onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
-            onDrop={(e) => { 
-              e.preventDefault(); 
-              setDragActive(false);
-              if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                setFile(e.dataTransfer.files[0]);
-              }
-            }}
-            onDragOver={(e) => e.preventDefault()}
-          >
-            <input 
-              type="file" 
-              id="video-upload" 
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
-              accept="video/*"
-              onChange={(e) => {
-                if (e.target.files && e.target.files[0]) {
-                  setFile(e.target.files[0]);
-                }
-              }}
-            />
-            {file ? (
-              <>
-                <div className="mb-4 text-green-500">
-                  <svg className="w-10 h-10 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <h3 className="text-gray-900 font-medium mb-1">{file.name}</h3>
-                <p className="text-sm text-gray-500">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
-              </>
-            ) : (
-              <>
-                <div className="mb-4 text-indigo-500"><Upload size={40} /></div>
-                <h3 className="text-gray-900 font-medium mb-1">Drag and drop your video here</h3>
-                <p className="text-sm text-gray-500">or click to browse files</p>
-              </>
-            )}
-          </div>
-
-          <button 
-            type="submit"
-            disabled={isUploading}
-            className="w-full py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm active:scale-[0.98] disabled:opacity-50"
-          >
-            {isUploading ? <><Loader2 size={18} className="animate-spin" /> Uploading...</> : 'Upload Video'}
-          </button>
-        </form>
-        )}
+        <Link
+          to="/editor/library"
+          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
+        >
+          View library
+          <ArrowRight size={16} />
+        </Link>
       </div>
+
+      <div className="rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-3 text-sm text-sky-900">
+        <div className="flex items-start gap-3">
+          <Info size={18} className="mt-0.5 shrink-0 text-sky-700" />
+          <p>
+            Default validation assumptions are <strong>2 GB max size</strong>, <strong>2 hours max duration</strong>, and <strong>MP4, MOV, WEBM</strong>. The hook is isolated so we can tighten these later without rewriting the queue flow.
+          </p>
+        </div>
+      </div>
+
+      <ValidationAlert alerts={validationAlerts} onDismiss={() => setValidationAlerts([])} />
+
+      <UploadDropzone onFilesSelected={handleFilesSelected} limits={limits} disabled={false} />
+
+      {queue.length ? (
+        <UploadQueue
+          queue={queue}
+          stats={stats}
+          onTitleChange={updateTitle}
+          onCancel={cancelUpload}
+          onRetry={retryUpload}
+          onRemove={removeFile}
+          onClearCompleted={clearCompleted}
+        />
+      ) : (
+        <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-500 shadow-sm">
+          Your queue is empty. Drop a few videos above to see validation, progress, ETA, and post-upload processing states kick in.
+        </div>
+      )}
     </div>
   );
 };

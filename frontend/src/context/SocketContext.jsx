@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
+import { useNotifications } from './NotificationContext';
 
 const SocketContext = createContext();
 
@@ -16,6 +17,7 @@ export const STAGES = [
 export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider = ({ children }) => {
+  const { notifyError, notifySuccess, notifyWarning } = useNotifications();
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   
@@ -34,8 +36,14 @@ export const SocketProvider = ({ children }) => {
       reconnection: true,
     });
 
-    newSocket.on('connect', () => setIsConnected(true));
-    newSocket.on('disconnect', () => setIsConnected(false));
+    newSocket.on('connect', () => {
+      setIsConnected(true);
+      notifySuccess('System alert', 'Realtime connection restored.', false);
+    });
+    newSocket.on('disconnect', () => {
+      setIsConnected(false);
+      notifyWarning('System alert', 'Realtime connection lost. Updates may be delayed.', true);
+    });
 
     // Handle real events if they come in
     newSocket.on('processing_started', (data) => handleProcessingStarted(data));
@@ -46,7 +54,7 @@ export const SocketProvider = ({ children }) => {
     setSocket(newSocket);
 
     return () => newSocket.close();
-  }, []);
+  }, [notifySuccess, notifyWarning]);
 
   // Utility to add to activity feed
   const logActivity = useCallback((type, message, videoId) => {
@@ -88,7 +96,8 @@ export const SocketProvider = ({ children }) => {
         : video
     ));
     logActivity('success', `Completed processing: ${data.title || data.id}`, data.id);
-  }, [logActivity]);
+    notifySuccess('Upload completed', `${data.title || data.id} finished processing and is ready.`, false);
+  }, [logActivity, notifySuccess]);
 
   const handleProcessingFailed = useCallback((data) => {
     setQueue(prev => prev.map(video => 
@@ -97,7 +106,8 @@ export const SocketProvider = ({ children }) => {
         : video
     ));
     logActivity('error', `Failed at stage ${STAGES[data.stage]}: ${data.error}`, data.id);
-  }, [logActivity]);
+    notifyError('Processing failed', `${data.error}`, true);
+  }, [logActivity, notifyError]);
 
   const retryProcessing = useCallback((id) => {
     // In a real app, emit to backend: socket.emit('retry_processing', { id })
@@ -107,7 +117,8 @@ export const SocketProvider = ({ children }) => {
         ? { ...video, status: 'processing', error: null, stage: 0, progress: 0 } 
         : video
     ));
-  }, [logActivity]);
+    notifyWarning('Retry started', `Processing retry launched for ${id}.`, false);
+  }, [logActivity, notifyWarning]);
 
   // Simulation Mode Logic
   useEffect(() => {

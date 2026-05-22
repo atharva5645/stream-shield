@@ -1,8 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import { 
-  Play, Pause, Volume2, VolumeX, Maximize, Minimize, 
-  Settings, ClosedCaption, FastForward 
-} from 'lucide-react';
+import React, { useEffect, useRef } from 'react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings, ClosedCaption } from 'lucide-react';
 import { useVideoPlayer } from '../../hooks/useVideoPlayer';
 
 const formatTime = (timeInSeconds) => {
@@ -15,6 +12,7 @@ const formatTime = (timeInSeconds) => {
 const VideoPlayer = ({ src, poster, onVideoEnd }) => {
   const videoElement = useRef(null);
   const playerContainer = useRef(null);
+  const touchStartRef = useRef(null);
 
   const {
     playerState,
@@ -25,45 +23,36 @@ const VideoPlayer = ({ src, poster, onVideoEnd }) => {
     toggleMute,
     handleVolume,
     toggleFullscreen,
-    showControlsTemporarily
+    showControlsTemporarily,
   } = useVideoPlayer(videoElement);
 
-  const { 
-    isPlaying, progress, currentTime, duration, 
-    speed, isMuted, volume, isFullscreen, showControls 
-  } = playerState;
+  const { isPlaying, progress, currentTime, duration, speed, isMuted, volume, isFullscreen, showControls } = playerState;
 
-  // Keyboard shortcuts
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      // Don't trigger if user is typing in an input
+    const handleKeyDown = (event) => {
       if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
 
-      switch(e.key.toLowerCase()) {
+      switch (event.key.toLowerCase()) {
         case ' ':
         case 'k':
-          e.preventDefault();
+          event.preventDefault();
           togglePlay();
           break;
         case 'f':
-          e.preventDefault();
+          event.preventDefault();
           toggleFullscreen(playerContainer);
           break;
         case 'm':
-          e.preventDefault();
+          event.preventDefault();
           toggleMute();
           break;
         case 'arrowright':
-          e.preventDefault();
-          if (videoElement.current) {
-            videoElement.current.currentTime += 5;
-          }
+          event.preventDefault();
+          if (videoElement.current) videoElement.current.currentTime += 5;
           break;
         case 'arrowleft':
-          e.preventDefault();
-          if (videoElement.current) {
-            videoElement.current.currentTime -= 5;
-          }
+          event.preventDefault();
+          if (videoElement.current) videoElement.current.currentTime -= 5;
           break;
         default:
           break;
@@ -73,18 +62,36 @@ const VideoPlayer = ({ src, poster, onVideoEnd }) => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [togglePlay, toggleFullscreen, toggleMute, showControlsTemporarily]);
+  }, [toggleFullscreen, toggleMute, togglePlay, showControlsTemporarily]);
+
+  const handleTouchStart = (event) => {
+    const touch = event.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+    showControlsTemporarily();
+  };
+
+  const handleTouchEnd = (event) => {
+    if (!touchStartRef.current || !videoElement.current) return;
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
+    const elapsed = Date.now() - touchStartRef.current.time;
+
+    if (Math.abs(deltaY) < 40 && Math.abs(deltaX) > 60 && elapsed < 600) {
+      videoElement.current.currentTime += deltaX > 0 ? 10 : -10;
+      showControlsTemporarily();
+    }
+
+    touchStartRef.current = null;
+  };
 
   return (
-    <div 
-      ref={playerContainer} 
-      className={`relative bg-black overflow-hidden flex items-center justify-center group ${isFullscreen ? 'h-screen w-screen' : 'w-full aspect-video rounded-xl shadow-2xl'}`}
+    <div
+      ref={playerContainer}
+      className={`group relative flex items-center justify-center overflow-hidden bg-black touch-pan-y ${isFullscreen ? 'h-screen w-screen' : 'w-full aspect-video rounded-xl shadow-2xl'}`}
       onMouseMove={showControlsTemporarily}
-      onMouseLeave={() => {
-        if (isPlaying) {
-          // Force hide when mouse leaves
-        }
-      }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       onClick={togglePlay}
     >
       <video
@@ -94,37 +101,31 @@ const VideoPlayer = ({ src, poster, onVideoEnd }) => {
         onTimeUpdate={handleOnTimeUpdate}
         onEnded={onVideoEnd}
         autoPlay
-        className="w-full h-full object-contain"
-        onClick={(e) => e.stopPropagation()} // Prevent double toggle
+        className="h-full w-full object-contain"
+        onClick={(event) => event.stopPropagation()}
       />
 
-      {/* Controls Overlay */}
-      <div 
-        className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent px-6 py-4 transition-opacity duration-300 ${showControls || !isPlaying ? 'opacity-100' : 'opacity-0'}`}
-        onClick={(e) => e.stopPropagation()} // Prevent toggling play when clicking controls
-      >
-        {/* Progress Bar */}
-        <div className="flex items-center gap-4 mb-4">
+      <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent px-3 py-3 xs:px-4 md:px-6 md:py-4 transition-opacity duration-300 ${showControls || !isPlaying ? 'opacity-100' : 'opacity-0'}`} onClick={(event) => event.stopPropagation()}>
+        <div className="mb-3 flex items-center gap-3 md:mb-4 md:gap-4">
           <input
             type="range"
             min="0"
             max="100"
             value={progress}
             onChange={handleVideoProgress}
-            className="w-full h-1 bg-white/30 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:h-2 transition-all"
+            className="h-1 w-full cursor-pointer appearance-none rounded-lg bg-white/30 accent-indigo-500 transition-all hover:h-2"
           />
         </div>
 
-        {/* Controls Row */}
-        <div className="flex items-center justify-between text-white">
-          <div className="flex items-center gap-6">
-            <button onClick={togglePlay} className="hover:text-indigo-400 transition-colors focus:outline-none">
-              {isPlaying ? <Pause size={24} className="fill-current" /> : <Play size={24} className="fill-current" />}
+        <div className="flex flex-wrap items-center justify-between gap-3 text-white">
+          <div className="flex min-w-0 items-center gap-3 xs:gap-4 md:gap-6">
+            <button onClick={togglePlay} className="rounded-full p-2 transition-colors hover:bg-white/10 hover:text-indigo-400 focus:outline-none">
+              {isPlaying ? <Pause size={22} className="fill-current md:h-6 md:w-6" /> : <Play size={22} className="fill-current md:h-6 md:w-6" />}
             </button>
-            
-            <div className="flex items-center gap-3 group/volume">
-              <button onClick={toggleMute} className="hover:text-indigo-400 transition-colors focus:outline-none">
-                {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
+
+            <div className="group/volume flex items-center gap-2 md:gap-3">
+              <button onClick={toggleMute} className="rounded-full p-2 transition-colors hover:bg-white/10 hover:text-indigo-400 focus:outline-none">
+                {isMuted || volume === 0 ? <VolumeX size={18} className="md:h-5 md:w-5" /> : <Volume2 size={18} className="md:h-5 md:w-5" />}
               </button>
               <input
                 type="range"
@@ -133,26 +134,21 @@ const VideoPlayer = ({ src, poster, onVideoEnd }) => {
                 step="0.01"
                 value={isMuted ? 0 : volume}
                 onChange={handleVolume}
-                className="w-0 opacity-0 group-hover/volume:w-20 group-hover/volume:opacity-100 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer accent-white transition-all duration-300"
+                className="hidden h-1 w-16 cursor-pointer appearance-none rounded-lg bg-white/30 accent-white md:block md:w-0 md:opacity-0 md:transition-all md:duration-300 md:group-hover/volume:w-20 md:group-hover/volume:opacity-100"
               />
             </div>
 
-            <div className="text-sm font-medium tracking-wide font-mono">
+            <div className="font-mono text-xs font-medium tracking-wide xs:text-sm">
               {formatTime(currentTime)} <span className="text-white/50">/</span> {formatTime(duration)}
             </div>
           </div>
 
-          <div className="flex items-center gap-6">
-            {/* Speed Selector (Simple select for now) */}
-            <div className="flex items-center gap-2 group/speed relative">
-              <button className="hover:text-indigo-400 transition-colors focus:outline-none flex items-center gap-1 text-sm font-medium">
+          <div className="flex items-center gap-2 xs:gap-3 md:gap-5">
+            <div className="group/speed relative flex items-center gap-2">
+              <button className="flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors hover:bg-white/10 hover:text-indigo-400 focus:outline-none xs:text-sm">
                 {speed}x
               </button>
-              <select 
-                className="absolute inset-0 opacity-0 cursor-pointer"
-                value={speed}
-                onChange={handleVideoSpeed}
-              >
+              <select className="absolute inset-0 cursor-pointer opacity-0" value={speed} onChange={handleVideoSpeed}>
                 <option value="0.5">0.5x</option>
                 <option value="1">1x</option>
                 <option value="1.5">1.5x</option>
@@ -160,14 +156,14 @@ const VideoPlayer = ({ src, poster, onVideoEnd }) => {
               </select>
             </div>
 
-            <button className="hover:text-indigo-400 transition-colors focus:outline-none">
-              <ClosedCaption size={20} />
+            <button className="rounded-full p-2 transition-colors hover:bg-white/10 hover:text-indigo-400 focus:outline-none">
+              <ClosedCaption size={18} className="md:h-5 md:w-5" />
             </button>
-            <button className="hover:text-indigo-400 transition-colors focus:outline-none">
-              <Settings size={20} />
+            <button className="hidden rounded-full p-2 transition-colors hover:bg-white/10 hover:text-indigo-400 focus:outline-none sm:block">
+              <Settings size={18} className="md:h-5 md:w-5" />
             </button>
-            <button onClick={() => toggleFullscreen(playerContainer)} className="hover:text-indigo-400 transition-colors focus:outline-none">
-              {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+            <button onClick={() => toggleFullscreen(playerContainer)} className="rounded-full p-2 transition-colors hover:bg-white/10 hover:text-indigo-400 focus:outline-none">
+              {isFullscreen ? <Minimize size={18} className="md:h-5 md:w-5" /> : <Maximize size={18} className="md:h-5 md:w-5" />}
             </button>
           </div>
         </div>

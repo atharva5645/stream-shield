@@ -1,233 +1,180 @@
 import React, { useState } from 'react';
-import { User, Mail, Calendar, Plus, Copy, Trash2, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
-import BackButton from '../../components/common/BackButton';
+import { Bell, CheckCircle2, Copy, Globe2, Lock, Plus, Server, Shield, Trash2 } from 'lucide-react';
+import AdminShell from '../../components/admin/AdminShell';
 
 const SystemSettings = () => {
-  const [activeTab, setActiveTab] = useState('profile');
+  const [activeTab, setActiveTab] = useState('platform');
   const [apiKeys, setApiKeys] = useState([
     {
       id: 1,
       name: 'Production API Key',
       key: 'sk_prod_************************xyz',
       fullKey: 'sk_prod_abcdef1234567890xyz',
-      lastUsed: '5/21/2026'
-    }
+      created: 'May 21, 2026',
+    },
   ]);
-  const [copiedId, setCopiedId] = useState(null);
-  const [isCreatingKey, setIsCreatingKey] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
+  const [copiedId, setCopiedId] = useState(null);
 
   const tabs = [
-    { id: 'profile', label: 'Profile', icon: User },
-    { id: 'security', label: 'Security', icon: AlertCircle },
-    { id: 'notifications', label: 'Notifications', icon: Mail },
-    { id: 'api_keys', label: 'API Keys', icon: Calendar }
+    { id: 'platform', label: 'Platform', icon: Globe2 },
+    { id: 'security', label: 'Security', icon: Shield },
+    { id: 'notifications', label: 'Alerts', icon: Bell },
+    { id: 'api_keys', label: 'API Keys', icon: Server },
   ];
 
-  const handleCreateKey = () => {
+  const createKey = () => {
     if (!newKeyName.trim()) return;
-    const randomSuffix = Math.random().toString(36).substring(2, 5);
-    const newKey = {
-      id: Date.now(),
-      name: newKeyName,
-      key: `sk_prod_************************${randomSuffix}`,
-      fullKey: `sk_prod_${Math.random().toString(36).substring(2, 15)}${randomSuffix}`,
-      lastUsed: 'Never'
-    };
-    setApiKeys([newKey, ...apiKeys]);
-    setIsCreatingKey(false);
+    const suffix = Math.random().toString(36).slice(2, 5);
+    setApiKeys((current) => [
+      {
+        id: Date.now(),
+        name: newKeyName,
+        key: `sk_prod_************************${suffix}`,
+        fullKey: `sk_prod_${Math.random().toString(36).slice(2, 15)}${suffix}`,
+        created: 'Just now',
+      },
+      ...current,
+    ]);
     setNewKeyName('');
   };
 
-  const handleDeleteKey = (id) => setApiKeys(apiKeys.filter(k => k.id !== id));
-  
-  const handleCopy = (id, fullKey) => {
-    navigator.clipboard.writeText(fullKey);
+  const copyKey = (id, value) => {
+    navigator.clipboard.writeText(value);
     setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+    window.setTimeout(() => setCopiedId(null), 1500);
   };
 
-  const { role } = useAuth();
-
   return (
-    <div className="max-w-6xl mx-auto">
-      <BackButton to={`/${role}/dashboard`} label="Back to Dashboard" />
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Settings</h1>
-        <p className="text-gray-600">Manage your account preferences</p>
-      </div>
-
-      <div className="flex flex-col md:flex-row gap-8">
-        {/* Sidebar Nav */}
-        <div className="w-full md:w-64 shrink-0 space-y-1">
+    <AdminShell badge="Settings" title="System settings" description="Tune platform policy, security controls, alerts, and admin API credentials from one operations settings panel.">
+      <div className="flex flex-col gap-8 md:flex-row">
+        <div className="w-full shrink-0 space-y-1 md:w-64">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm
-                  ${activeTab === tab.id 
-                    ? 'bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm' 
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
+                className={`w-full rounded-xl px-4 py-3 text-left text-sm font-medium transition-all ${
+                  activeTab === tab.id ? 'border border-indigo-100 bg-indigo-50 text-indigo-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
               >
-                <Icon size={18} className={activeTab === tab.id ? 'text-indigo-600' : 'text-gray-500'} />
-                {tab.label}
+                <span className="flex items-center gap-3">
+                  <Icon size={18} className={activeTab === tab.id ? 'text-indigo-600' : 'text-gray-500'} />
+                  {tab.label}
+                </span>
               </button>
             );
           })}
         </div>
 
-        {/* Main Content Area */}
-        <div className="flex-1 bg-white border border-gray-200 rounded-2xl shadow-sm">
-          {activeTab === 'profile' && (
-            <div className="p-8">
-              <h2 className="text-xl font-bold text-gray-900 mb-8">Profile Information</h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700 flex items-center gap-2"><User size={16} /> Full Name</label>
-                  <input type="text" defaultValue="John Doe" className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all" />
+        <div className="flex-1 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+          {activeTab === 'platform' ? (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl font-bold text-slate-950">Platform controls</h2>
+                <p className="mt-1 text-sm text-slate-500">Set default moderation, retention, and tenant behavior.</p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="rounded-2xl border border-slate-200 p-4">
+                  <div className="font-semibold text-slate-900">Auto-approve low-risk videos</div>
+                  <div className="mt-1 text-sm text-slate-500">Bypass manual moderation for low sensitivity uploads.</div>
+                  <input type="checkbox" defaultChecked className="mt-4 h-5 w-5 rounded border-slate-300 text-indigo-600" />
+                </label>
+                <label className="rounded-2xl border border-slate-200 p-4">
+                  <div className="font-semibold text-slate-900">Tenant quota warnings</div>
+                  <div className="mt-1 text-sm text-slate-500">Alert admins when storage usage crosses soft limits.</div>
+                  <input type="checkbox" defaultChecked className="mt-4 h-5 w-5 rounded border-slate-300 text-indigo-600" />
+                </label>
+              </div>
+            </div>
+          ) : null}
+
+          {activeTab === 'security' ? (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl font-bold text-slate-950">Security controls</h2>
+                <p className="mt-1 text-sm text-slate-500">Manage authentication and operational hardening.</p>
+              </div>
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <div className="flex items-center gap-3">
+                    <Lock size={18} className="text-slate-600" />
+                    <div>
+                      <div className="font-semibold text-slate-900">Enforce 2FA for admins</div>
+                      <div className="text-sm text-slate-500">Require second-factor authentication for all admin accounts.</div>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700 flex items-center gap-2"><Mail size={16} /> Email Address</label>
-                  <input type="email" defaultValue="john.doe@example.com" className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all" />
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <div className="font-semibold text-slate-900">Session timeout</div>
+                  <div className="mt-1 text-sm text-slate-500">Automatically expire admin sessions after 30 minutes of inactivity.</div>
                 </div>
               </div>
             </div>
-          )}
+          ) : null}
 
-          {activeTab === 'api_keys' && (
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="p-6 border-b border-gray-100">
-                <h2 className="text-lg font-bold text-gray-900">API Credentials</h2>
-                <p className="text-sm text-gray-500 mt-1">Manage your API keys for programmatic access.</p>
-              </div>
-              
-              <div className="p-6 space-y-6">
-                {/* Generate New Key */}
-                <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-4">
-                  <div>
-                    <h3 className="font-semibold text-gray-900">Generate New Key</h3>
-                    <p className="text-sm text-gray-500">Create a new API key with your current permissions.</p>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <input 
-                      type="text" 
-                      placeholder="Enter a name for this key (e.g., Zapier Integration)" 
-                      value={newKeyName}
-                      onChange={(e) => setNewKeyName(e.target.value)}
-                      className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
-                    />
-                    <button 
-                      onClick={handleCreateKey}
-                      disabled={isCreatingKey || !newKeyName.trim()}
-                      className="flex justify-center items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-medium transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Plus size={16} />
-                      {isCreatingKey ? 'Generating...' : 'Create Key'}
-                    </button>
-                  </div>
+          {activeTab === 'notifications' ? (
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold text-slate-950">Alert preferences</h2>
+              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 p-4">
+                <input type="checkbox" defaultChecked className="h-5 w-5 rounded border-slate-300 text-indigo-600" />
+                <div>
+                  <div className="font-semibold text-slate-900">Critical platform alerts</div>
+                  <div className="text-sm text-slate-500">Downtime, processing failures, and auth incidents.</div>
                 </div>
+              </label>
+              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 p-4">
+                <input type="checkbox" defaultChecked className="h-5 w-5 rounded border-slate-300 text-indigo-600" />
+                <div>
+                  <div className="font-semibold text-slate-900">Moderation digest</div>
+                  <div className="text-sm text-slate-500">Daily rollup of queued and high-risk content.</div>
+                </div>
+              </label>
+            </div>
+          ) : null}
 
-                <div className="space-y-4">
-                  {apiKeys.map((apiKey) => (
-                    <div key={apiKey.id} className="p-4 border border-gray-200 rounded-xl bg-white hover:border-indigo-300 transition-colors">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-gray-900">{apiKey.name}</span>
-                            {apiKey.id === apiKeys[0].id && (
-                              <span className="text-[10px] uppercase tracking-wider font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">Newest</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 text-sm">
-                            <code className="text-gray-500 bg-gray-100 px-2 py-1 rounded-md font-mono text-xs">{apiKey.key}</code>
-                            <button 
-                              onClick={() => handleCopy(apiKey.id, apiKey.fullKey)}
-                              className="text-gray-400 hover:text-indigo-600 transition-colors p-1"
-                              title="Copy full key"
-                            >
-                              {copiedId === apiKey.id ? <CheckCircle2 size={14} className="text-green-500" /> : <Copy size={14} />}
-                            </button>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4 text-sm">
-                          <div className="text-gray-500">
-                            Created <span className="text-gray-900 font-medium">{apiKey.created}</span>
-                          </div>
-                          <button 
-                            onClick={() => handleDeleteKey(apiKey.id)}
-                            className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors"
-                          >
-                            <Trash2 size={16} />
+          {activeTab === 'api_keys' ? (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl font-bold text-slate-950">API credentials</h2>
+                <p className="mt-1 text-sm text-slate-500">Manage admin API keys for integrations and automation.</p>
+              </div>
+              <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row">
+                <input value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} placeholder="Key name" className="flex-1 rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-sky-400" />
+                <button onClick={createKey} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-medium text-white hover:bg-slate-800">
+                  <Plus size={16} />
+                  Create key
+                </button>
+              </div>
+              <div className="space-y-4">
+                {apiKeys.map((apiKey) => (
+                  <div key={apiKey.id} className="rounded-2xl border border-slate-200 p-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div className="font-semibold text-slate-900">{apiKey.name}</div>
+                        <div className="mt-2 flex items-center gap-2">
+                          <code className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600">{apiKey.key}</code>
+                          <button onClick={() => copyKey(apiKey.id, apiKey.fullKey)} className="text-slate-500 hover:text-indigo-600">
+                            {copiedId === apiKey.id ? <CheckCircle2 size={15} className="text-emerald-600" /> : <Copy size={15} />}
                           </button>
                         </div>
                       </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-slate-500">{apiKey.created}</span>
+                        <button onClick={() => setApiKeys((current) => current.filter((item) => item.id !== apiKey.id))} className="rounded-lg p-2 text-rose-700 hover:bg-rose-50">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
             </div>
-          )}
-
-          {activeTab === 'security' && (
-            <div className="p-8">
-              <h2 className="text-xl font-bold text-gray-900 mb-8">Security Settings</h2>
-              
-              <div className="space-y-6">
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-4">Change Password</h3>
-                  <div className="space-y-4 max-w-md">
-                    <input type="password" placeholder="Current Password" className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all" />
-                    <input type="password" placeholder="New Password" className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all" />
-                    <button className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors">Update Password</button>
-                  </div>
-                </div>
-                <hr className="border-gray-200" />
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-4">Two-Factor Authentication</h3>
-                  <p className="text-sm text-gray-600 mb-4">Add an extra layer of security to your account.</p>
-                  <button className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-50 transition-colors">Enable 2FA</button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'notifications' && (
-            <div className="p-8">
-              <h2 className="text-xl font-bold text-gray-900 mb-8">Notification Preferences</h2>
-              
-              <div className="space-y-4">
-                <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
-                  <input type="checkbox" defaultChecked className="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" />
-                  <div>
-                    <div className="font-medium text-gray-900">Email Notifications</div>
-                    <div className="text-sm text-gray-500">Receive daily summaries and critical alerts.</div>
-                  </div>
-                </label>
-                <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
-                  <input type="checkbox" className="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" />
-                  <div>
-                    <div className="font-medium text-gray-900">SMS Alerts</div>
-                    <div className="text-sm text-gray-500">Get text messages for important security events.</div>
-                  </div>
-                </label>
-                <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
-                  <input type="checkbox" defaultChecked className="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" />
-                  <div>
-                    <div className="font-medium text-gray-900">Marketing Updates</div>
-                    <div className="text-sm text-gray-500">Receive news about upcoming features.</div>
-                  </div>
-                </label>
-              </div>
-            </div>
-          )}
+          ) : null}
         </div>
       </div>
-    </div>
+    </AdminShell>
   );
 };
 

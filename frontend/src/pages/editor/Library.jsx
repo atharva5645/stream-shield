@@ -1,121 +1,250 @@
-import React, { useState, useEffect } from 'react';
-import PagePlaceholder from '../../components/common/PagePlaceholder';
-import { Film, MoreVertical, Play, Clock, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Clock, Film, MoreVertical, Play, SlidersHorizontal, X } from 'lucide-react';
 import BackButton from '../../components/common/BackButton';
+import { useTenant } from '../../context/TenantContext';
+import { formatBytes, formatDuration } from '../../hooks/useVideoValidation';
+import useVideoLibraryFilters from '../../hooks/useVideoLibraryFilters';
+import SearchBar from '../../components/filters/SearchBar';
+import SortDropdown from '../../components/filters/SortDropdown';
+import FilterDrawer from '../../components/filters/FilterDrawer';
+import FilterChip from '../../components/filters/FilterChip';
+import PaginationControls from '../../components/filters/PaginationControls';
+import EmptyState from '../../components/feedback/EmptyState';
+import { useNotifications } from '../../context/NotificationContext';
+
+const inferCategory = (video) => {
+  const text = `${video.title || ''} ${video.fileName || ''}`.toLowerCase();
+  if (text.includes('training') || text.includes('onboarding') || text.includes('compliance')) return 'Training';
+  if (text.includes('event') || text.includes('all hands') || text.includes('town hall')) return 'Events';
+  if (text.includes('match') || text.includes('sport')) return 'Sports';
+  if (text.includes('launch') || text.includes('brand') || text.includes('campaign')) return 'Marketing';
+  if (text.includes('lecture') || text.includes('course') || text.includes('student')) return 'Education';
+  return 'General';
+};
+
+const inferReviewState = (video) => {
+  if ((video.status || '').toLowerCase() === 'processing') return 'processing';
+  const text = `${video.title || ''} ${video.fileName || ''}`.toLowerCase();
+  if (text.includes('compliance') || text.includes('sensitive') || text.includes('flag')) return 'flagged';
+  return 'safe';
+};
 
 const Library = () => {
   const [videos, setVideos] = useState([]);
   const [playingVideo, setPlayingVideo] = useState(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const { currentTenant } = useTenant();
+  const { notifyWarning } = useNotifications();
 
   useEffect(() => {
     let stored = JSON.parse(localStorage.getItem('mockVideos') || '[]');
-    
-    // Auto-upgrade any legacy videos that are stuck in Processing
     let upgraded = false;
-    stored = stored.map(v => {
-      if (v.status === 'Processing' || !v.videoUrl) {
+
+    stored = stored.map((video) => {
+      if (video.status === 'Processing' || !video.videoUrl) {
         upgraded = true;
         return {
-          ...v,
+          ...video,
           status: 'Processed',
-          videoUrl: v.videoUrl || 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+          videoUrl: video.videoUrl || 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
         };
       }
-      return v;
+      return video;
     });
 
     if (upgraded) {
       localStorage.setItem('mockVideos', JSON.stringify(stored));
     }
-    
-    setVideos(stored);
-  }, []);
 
-  if (videos.length === 0) {
+    setVideos(stored.filter((video) => !video.tenantId || video.tenantId === currentTenant?.id));
+  }, [currentTenant]);
+
+  const normalizedVideos = useMemo(
+    () =>
+      videos.map((video) => ({
+        ...video,
+        title: video.title || video.fileName || 'Untitled upload',
+        fileName: video.fileName || video.title || 'video.mp4',
+        durationSeconds: Math.max(0, Math.round(video.duration || 0)),
+        category: video.category || inferCategory(video),
+        reviewState: video.reviewState || inferReviewState(video),
+      })),
+    [videos],
+  );
+
+  useEffect(() => {
+    const flaggedCount = normalizedVideos.filter((video) => video.reviewState === 'flagged').length;
+    if (flaggedCount) {
+      notifyWarning('Video flagged', `${flaggedCount} video${flaggedCount > 1 ? 's are' : ' is'} flagged in ${currentTenant?.name}.`, false);
+    }
+  }, [currentTenant?.name, normalizedVideos, notifyWarning]);
+
+  const {
+    filters,
+    searchInput,
+    setSearchInput,
+    toggleStatus,
+    setFilter,
+    clearAllFilters,
+    saveCurrentFilter,
+    applySavedFilter,
+    removeSavedFilter,
+    savedFilters,
+    filteredVideos,
+    paginatedVideos,
+    currentPage,
+    totalPages,
+    setPage,
+    activeChips,
+    statusOptions,
+    categoryOptions,
+    sortOptions,
+  } = useVideoLibraryFilters(normalizedVideos);
+
+  if (normalizedVideos.length === 0) {
     return (
-      <PagePlaceholder 
-        title="Video Library" 
-        description="Manage your uploaded videos. Edit metadata, thumbnails, and privacy settings." 
+      <EmptyState
+        title="Video Library"
+        description="Manage your uploaded videos. Edit metadata, thumbnails, and privacy settings."
         icon={Film}
-        backTo="/editor/dashboard"
-        backLabel="Back to Dashboard"
+        actionTo="/editor/upload"
+        actionLabel="Upload video"
+        tone="sky"
       />
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
+    <div className="max-w-7xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
         <div>
           <BackButton to="/editor/dashboard" label="Back to Dashboard" />
-          <h2 className="text-2xl font-bold text-gray-900 mt-4">Video Library</h2>
-          <p className="text-gray-500 mt-1">Manage and organize your uploaded content</p>
+          <h2 className="mt-4 text-2xl font-bold text-gray-900">Video Library</h2>
+          <p className="mt-1 text-gray-500">Manage uploaded content for {currentTenant?.name}</p>
         </div>
       </div>
 
-      {playingVideo && (
-        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 rounded-2xl w-full max-w-4xl overflow-hidden relative">
-            <div className="flex justify-between items-center p-4 border-b border-gray-800">
-              <h3 className="text-white font-medium">{playingVideo.title}</h3>
-              <button onClick={() => setPlayingVideo(null)} className="text-gray-400 hover:text-white transition-colors">
+      <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+          <SearchBar value={searchInput} onChange={setSearchInput} onClear={() => setSearchInput('')} />
+          <div className="flex flex-wrap gap-3">
+            <SortDropdown value={filters.sortBy} options={sortOptions} onChange={(value) => setFilter('sort', value)} />
+            <button type="button" onClick={() => setDrawerOpen(true)} className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <SlidersHorizontal size={16} />
+              Filters
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {activeChips.map((chip) => (
+            <FilterChip key={chip.key} label={chip.label} onRemove={chip.onRemove} />
+          ))}
+          {!activeChips.length ? <span className="text-sm text-slate-500">No active filters</span> : null}
+        </div>
+      </div>
+
+      {playingVideo ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
+          <div className="relative w-full max-w-4xl overflow-hidden rounded-2xl bg-gray-900">
+            <div className="flex items-center justify-between border-b border-gray-800 p-4">
+              <h3 className="font-medium text-white">{playingVideo.title}</h3>
+              <button type="button" onClick={() => setPlayingVideo(null)} className="text-gray-400 transition-colors hover:text-white">
                 <X size={24} />
               </button>
             </div>
             <div className="aspect-video bg-black">
-              <video 
-                src={playingVideo.videoUrl} 
-                controls 
-                autoPlay
-                className="w-full h-full object-contain"
-              />
+              <video src={playingVideo.videoUrl} controls autoPlay className="h-full w-full object-contain" />
             </div>
           </div>
         </div>
+      ) : null}
+
+      <div className="flex items-center justify-between text-sm text-slate-500">
+        <span>{filteredVideos.length} results</span>
+        <span>{savedFilters.length} saved filters</span>
+      </div>
+
+      {paginatedVideos.length === 0 ? (
+        <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
+          <h3 className="text-xl font-bold text-slate-900">No videos match these filters</h3>
+          <p className="mt-2 text-sm text-slate-500">Try clearing a few chips or broadening your search.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+          {paginatedVideos.map((video) => (
+            <div key={video.id} className="group overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+              <div
+                className="relative aspect-video cursor-pointer bg-gray-100"
+                onClick={() => {
+                  if (video.videoUrl) setPlayingVideo(video);
+                }}
+              >
+                {video.thumbnail ? (
+                  <img src={video.thumbnail} alt={video.title} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-gray-400">
+                    <Film size={32} />
+                  </div>
+                )}
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-900/40 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button type="button" className="rounded-full bg-white p-3 text-gray-900 transition-transform group-hover:scale-100">
+                    <Play size={20} className="fill-current" />
+                  </button>
+                </div>
+                {video.reviewState === 'processing' ? (
+                  <div className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-800">
+                    <Clock size={12} />
+                    Processing
+                  </div>
+                ) : video.reviewState === 'flagged' ? (
+                  <div className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-rose-100 px-2 py-1 text-xs font-medium text-rose-700">
+                    <AlertTriangle size={12} />
+                    Flagged
+                  </div>
+                ) : (
+                  <div className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                    <CheckCircle2 size={12} />
+                    Safe
+                  </div>
+                )}
+              </div>
+              <div className="p-4">
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <h3 className="line-clamp-1 font-semibold text-gray-900" title={video.title}>
+                    {video.title}
+                  </h3>
+                  <button type="button" className="text-gray-400 hover:text-gray-600">
+                    <MoreVertical size={18} />
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                  <span>{formatBytes(video.size)}</span>
+                  <span>{new Date(video.date).toLocaleDateString()}</span>
+                  <span>{formatDuration(video.durationSeconds)}</span>
+                  <span>{video.category}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {videos.map(video => (
-          <div key={video.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow group">
-            <div 
-              className="aspect-video bg-gray-100 relative flex items-center justify-center cursor-pointer"
-              onClick={() => {
-                if (video.videoUrl) setPlayingVideo(video);
-              }}
-            >
-              <Film size={32} className="text-gray-400" />
-              <div className="absolute inset-0 bg-gray-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <button className="bg-white text-gray-900 rounded-full p-3 transform scale-90 group-hover:scale-100 transition-transform">
-                  <Play size={20} className="fill-current" />
-                </button>
-              </div>
-              {video.status === 'Processing' ? (
-                <div className="absolute top-2 right-2 bg-yellow-100 text-yellow-800 text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1">
-                  <Clock size={12} />
-                  Processing
-                </div>
-              ) : (
-                <div className="absolute top-2 right-2 bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1">
-                  Ready
-                </div>
-              )}
-            </div>
-            <div className="p-4">
-              <div className="flex justify-between items-start mb-2">
-                <h3 className="font-semibold text-gray-900 line-clamp-1" title={video.title}>{video.title}</h3>
-                <button className="text-gray-400 hover:text-gray-600">
-                  <MoreVertical size={18} />
-                </button>
-              </div>
-              <div className="flex items-center text-xs text-gray-500 gap-3">
-                <span>{(video.size / (1024 * 1024)).toFixed(1)} MB</span>
-                <span>•</span>
-                <span>{new Date(video.date).toLocaleDateString()}</span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setPage} />
+
+      <FilterDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        filters={filters}
+        statusOptions={statusOptions}
+        categoryOptions={categoryOptions}
+        toggleStatus={toggleStatus}
+        setFilter={setFilter}
+        clearAllFilters={clearAllFilters}
+        savedFilters={savedFilters}
+        applySavedFilter={applySavedFilter}
+        removeSavedFilter={removeSavedFilter}
+        saveCurrentFilter={saveCurrentFilter}
+      />
     </div>
   );
 };
