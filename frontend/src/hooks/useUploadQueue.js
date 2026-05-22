@@ -1,115 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import axios from 'axios';
-import { formatBytes } from './useVideoValidation';
+import api from '../api/axios';
 import { useTenant } from '../context/TenantContext';
 import { useNotifications } from '../context/NotificationContext';
+import { formatBytes } from './useVideoValidation';
+import { useSocket } from '../context/SocketContext';
 
-const STORAGE_KEY = 'mockVideos';
-const SAMPLE_VIDEO_URL = 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
-const MOCK_UPLOAD_ENDPOINT = '/mock/uploads';
-
-const createUploadId = () => {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-
-  return `upload-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+const formatEta = (seconds) => {
+  if (seconds === null || !Number.isFinite(seconds)) return 'Calculating...';
+  if (seconds < 2) return 'Almost done';
+  if (seconds < 60) return `${Math.ceil(seconds)} seconds left`;
+  const mins = Math.ceil(seconds / 60);
+  return `${mins} min${mins !== 1 ? 's' : ''} left`;
 };
 
-const formatEta = (secondsRemaining) => {
-  if (!Number.isFinite(secondsRemaining) || secondsRemaining <= 0) return 'Calculating';
-  if (secondsRemaining < 60) return `${Math.ceil(secondsRemaining)}s remaining`;
-
-  const minutes = Math.floor(secondsRemaining / 60);
-  const seconds = Math.ceil(secondsRemaining % 60);
-  return `${minutes}m ${String(seconds).padStart(2, '0')}s remaining`;
-};
-
-const uploadClient = axios.create({
-  adapter: (config) =>
-    new Promise((resolve, reject) => {
-      const isFormData = config.data instanceof FormData;
-      const file = isFormData ? config.data.get('file') : config.data?.file;
-      const totalBytes = file?.size ?? 0;
-      const startedAt = performance.now();
-      let loadedBytes = 0;
-
-      if (!file) {
-        reject(new axios.AxiosError('No file attached to upload request.', 'ERR_BAD_REQUEST', config));
-        return;
-      }
-
-      const failUpload = () => {
-        reject(new axios.AxiosError('Upload canceled.', 'ERR_CANCELED', config));
-      };
-
-      if (config.signal?.aborted) {
-        failUpload();
-        return;
-      }
-
-      const handleAbort = () => {
-        clearInterval(intervalId);
-        config.signal?.removeEventListener('abort', handleAbort);
-        failUpload();
-      };
-
-      config.signal?.addEventListener('abort', handleAbort);
-
-      const intervalId = window.setInterval(() => {
-        const chunkSize = Math.max(totalBytes * (0.04 + Math.random() * 0.09), 256 * 1024);
-        loadedBytes = Math.min(totalBytes, loadedBytes + chunkSize);
-
-        config.onUploadProgress?.({
-          loaded: loadedBytes,
-          total: totalBytes,
-          progress: totalBytes ? loadedBytes / totalBytes : 0,
-          bytes: chunkSize,
-          rate: loadedBytes / ((performance.now() - startedAt) / 1000),
-          estimated: totalBytes ? (totalBytes - loadedBytes) / Math.max(loadedBytes / ((performance.now() - startedAt) / 1000), 1) : 0,
-          upload: true,
-        });
-
-        if (loadedBytes >= totalBytes) {
-          clearInterval(intervalId);
-          config.signal?.removeEventListener('abort', handleAbort);
-
-          window.setTimeout(() => {
-            resolve({
-              data: {
-                id: createUploadId(),
-                url: SAMPLE_VIDEO_URL,
-                mock: true,
-              },
-              status: 200,
-              statusText: 'OK',
-              headers: {},
-              config,
-            });
-          }, 500 + Math.random() * 700);
-        }
-      }, 280);
-    }),
-});
-
-const persistCompletedUpload = (item, currentTenant) => {
-  const existingVideos = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-  const newVideo = {
-    id: item.libraryId,
-    tenantId: currentTenant?.id ?? 'default-tenant',
-    tenantName: currentTenant?.name ?? 'Default Workspace',
-    title: item.title,
-    fileName: item.file.name,
-    size: item.file.size,
-    date: new Date().toISOString(),
-    status: 'Processed',
-    videoUrl: item.remoteUrl || SAMPLE_VIDEO_URL,
-    thumbnail: item.thumbnailDataUrl,
-    duration: item.duration,
-  };
-
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([newVideo, ...existingVideos]));
-};
+const createUploadId = () => `up_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`;
 
 export const useUploadQueue = () => {
   const [queue, setQueue] = useState([]);
@@ -235,31 +139,30 @@ export const useUploadQueue = () => {
     const startTime = performance.now();
 
     const formData = new FormData();
-    formData.append('file', nextQueuedItem.file);
+    formData.append('video', nextQueuedItem.file);
     formData.append('title', nextQueuedItem.title || '');
 
-    uploadClient
-      .post(
-        MOCK_UPLOAD_ENDPOINT,
-        formData,
-        {
-          signal: controller.signal,
-          onUploadProgress: (event) => {
-            const total = event.total || nextQueuedItem.file.size;
-            const loaded = Math.min(event.loaded || 0, total);
-            const elapsedSeconds = Math.max((performance.now() - startTime) / 1000, 0.1);
-            const speed = loaded / elapsedSeconds;
-            const eta = total > loaded ? (total - loaded) / Math.max(speed, 1) : 0;
-
-            updateQueueItem(nextQueuedItem.id, {
-              progress: total ? Math.round((loaded / total) * 100) : 0,
-              uploadedBytes: loaded,
-              speedBytesPerSecond: speed,
-              etaSeconds: eta,
-            });
-          },
+    api
+      .post('/videos/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
         },
-      )
+        signal: controller.signal,
+        onUploadProgress: (event) => {
+          const total = event.total || nextQueuedItem.file.size;
+          const loaded = Math.min(event.loaded || 0, total);
+          const elapsedSeconds = Math.max((performance.now() - startTime) / 1000, 0.1);
+          const speed = loaded / elapsedSeconds;
+          const eta = total > loaded ? (total - loaded) / Math.max(speed, 1) : 0;
+
+          updateQueueItem(nextQueuedItem.id, {
+            progress: total ? Math.round((loaded / total) * 100) : 0,
+            uploadedBytes: loaded,
+            speedBytesPerSecond: speed,
+            etaSeconds: eta,
+          });
+        },
+      })
       .then((response) => {
         controllersRef.current.delete(nextQueuedItem.id);
         updateQueueItem(nextQueuedItem.id, {
@@ -268,31 +171,15 @@ export const useUploadQueue = () => {
           speedBytesPerSecond: nextQueuedItem.file.size / Math.max((performance.now() - startTime) / 1000, 1),
           etaSeconds: 0,
           status: 'processing',
-          remoteUrl: response.data?.url || SAMPLE_VIDEO_URL,
+          remoteUrl: response.data?.video?.url || null,
+          videoId: response.data?.video?._id || null,
         });
 
-        window.setTimeout(() => {
-          const latestItem = queueRef.current.find((item) => item.id === nextQueuedItem.id);
-          if (!latestItem || latestItem.status === 'canceled') return;
-
-          updateQueueItem(nextQueuedItem.id, {
-            status: 'completed',
-            error: null,
-          });
-
-          persistCompletedUpload(
-            {
-              ...latestItem,
-              remoteUrl: response.data?.url || SAMPLE_VIDEO_URL,
-            },
-            currentTenant,
-          );
-          notifySuccess('Upload completed', `${latestItem.title} was uploaded to ${currentTenant?.name || 'your workspace'}.`, false);
-        }, 1000 + Math.random() * 1000);
+        notifySuccess('Upload successful', `${nextQueuedItem.title} was successfully uploaded and is now processing.`, false);
       })
       .catch((error) => {
         controllersRef.current.delete(nextQueuedItem.id);
-        if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
+        if (error.code === 'ERR_CANCELED') {
           updateQueueItem(nextQueuedItem.id, {
             status: 'canceled',
             error: 'Upload canceled by user.',
@@ -309,6 +196,51 @@ export const useUploadQueue = () => {
       });
   }, [currentTenant, queue]);
 
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleProcessingCompleted = (data) => {
+      setQueue((currentQueue) =>
+        currentQueue.map((item) => {
+          if (item.videoId === data.videoId || (item.title && data.title && item.title === data.title)) {
+            return {
+              ...item,
+              status: 'completed',
+              error: null,
+            };
+          }
+          return item;
+        })
+      );
+    };
+
+    const handleProcessingFailed = (data) => {
+      setQueue((currentQueue) =>
+        currentQueue.map((item) => {
+          if (item.videoId === data.videoId || (item.title && data.title && item.title === data.title)) {
+            return {
+              ...item,
+              status: 'failed',
+              error: data.error || 'Processing failed',
+            };
+          }
+          return item;
+        })
+      );
+    };
+
+    socket.on('processing-completed', handleProcessingCompleted);
+    socket.on('processing-failed', handleProcessingFailed);
+
+    return () => {
+      socket.off('processing-completed', handleProcessingCompleted);
+      socket.off('processing-failed', handleProcessingFailed);
+    };
+  }, [socket]);
+
+  // Clean up aborted controllers when the queue hook unmounts
   useEffect(() => {
     return () => {
       controllersRef.current.forEach((controller) => controller.abort());

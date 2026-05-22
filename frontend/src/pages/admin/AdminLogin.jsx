@@ -8,24 +8,22 @@ const AdminLogin = () => {
   const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleAdminDemoLogin = (e) => {
+  const handleAdminLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     
-    const mockUser = {
-      id: 'admin-' + Math.random().toString(36).substr(2, 9),
-      name: 'System Administrator',
-      email: 'admin@streamops.com',
-      role: 'admin',
-      permissions: ['all']
-    };
-    const mockToken = `mock-jwt-token-for-admin`;
+    const email = e.target.email.value;
+    const password = e.target.password.value;
     
-    setTimeout(() => {
-      login(mockUser, mockToken);
+    try {
+      await login({ email, password });
       navigate(`/admin/dashboard`);
+    } catch (error) {
+      console.error('Login failed:', error);
+      alert('Login failed. Please check your credentials.');
+    } finally {
       setIsLoading(false);
-    }, 800);
+    }
   };
 
   return (
@@ -60,7 +58,7 @@ const AdminLogin = () => {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="bg-white py-8 px-6 shadow-xl rounded-2xl sm:px-10 border border-gray-100">
-          <form className="space-y-6" onSubmit={handleAdminDemoLogin}>
+          <form className="space-y-6" onSubmit={handleAdminLogin}>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 Admin Email
@@ -71,7 +69,7 @@ const AdminLogin = () => {
                   name="email"
                   type="email"
                   required
-                  defaultValue="admin@streamops.com"
+                  defaultValue="admin@vaultstream.com"
                   className="appearance-none block w-full px-4 py-3 border border-gray-300 bg-gray-50 text-gray-900 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all sm:text-sm"
                 />
               </div>

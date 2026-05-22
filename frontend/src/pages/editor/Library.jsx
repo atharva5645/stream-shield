@@ -11,6 +11,7 @@ import FilterChip from '../../components/filters/FilterChip';
 import PaginationControls from '../../components/filters/PaginationControls';
 import EmptyState from '../../components/feedback/EmptyState';
 import { useNotifications } from '../../context/NotificationContext';
+import api from '../../api/axios';
 
 const inferCategory = (video) => {
   const text = `${video.title || ''} ${video.fileName || ''}`.toLowerCase();
@@ -31,6 +32,7 @@ const inferReviewState = (video) => {
 
 const Library = () => {
   const [videos, setVideos] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [playingVideo, setPlayingVideo] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null);
@@ -44,50 +46,51 @@ const Library = () => {
     setOpenMenuId(null);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!videoToDelete) return;
-    const stored = JSON.parse(localStorage.getItem('mockVideos') || '[]');
-    const newStored = stored.filter((v) => v.id !== videoToDelete && v.libraryId !== videoToDelete);
-    localStorage.setItem('mockVideos', JSON.stringify(newStored));
-    setVideos((prev) => prev.filter((v) => v.id !== videoToDelete && v.libraryId !== videoToDelete));
-    setVideoToDelete(null);
+    try {
+      const res = await api.delete(`/videos/${videoToDelete}`);
+      if (res.data.success) {
+        setVideos((prev) => prev.filter((v) => v._id !== videoToDelete && v.id !== videoToDelete));
+        setVideoToDelete(null);
+      }
+    } catch (error) {
+      console.error('Failed to delete video', error);
+      notifyWarning('Failed to delete video. Please try again.');
+    }
   };
 
   useEffect(() => {
-    let stored = JSON.parse(localStorage.getItem('mockVideos') || '[]');
-    let upgraded = false;
-
-    stored = stored.map((video) => {
-      if (video.status === 'Processing' || !video.videoUrl) {
-        upgraded = true;
-        return {
-          ...video,
-          status: 'Processed',
-          videoUrl: video.videoUrl || 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-        };
+    const fetchVideos = async () => {
+      setIsLoading(true);
+      try {
+        const response = await api.get('/videos');
+        if (response.data.success) {
+          setVideos(response.data.videos);
+        }
+      } catch (error) {
+        console.error('Failed to fetch library videos:', error);
+      } finally {
+        setIsLoading(false);
       }
-      return video;
-    });
+    };
 
-    if (upgraded) {
-      localStorage.setItem('mockVideos', JSON.stringify(stored));
-    }
-
-    setVideos(stored.filter((video) => !video.tenantId || video.tenantId === currentTenant?.id));
+    fetchVideos();
   }, [currentTenant]);
 
-  const normalizedVideos = useMemo(
-    () =>
-      videos.map((video) => ({
-        ...video,
-        title: video.title || video.fileName || 'Untitled upload',
-        fileName: video.fileName || video.title || 'video.mp4',
-        durationSeconds: Math.max(0, Math.round(video.duration || 0)),
-        category: video.category || inferCategory(video),
-        reviewState: video.reviewState || inferReviewState(video),
-      })),
-    [videos],
-  );
+  const normalizedVideos = useMemo(() => {
+    const baseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000';
+    return videos.map((video) => ({
+      ...video,
+      id: video._id,
+      title: video.title || video.originalName || 'Untitled upload',
+      fileName: video.originalName || video.title || 'video.mp4',
+      durationSeconds: Math.max(0, Math.round(video.duration || 0)),
+      category: video.category || inferCategory(video),
+      reviewState: video.status === 'processing' ? 'processing' : (video.sensitivity === 'flagged' ? 'flagged' : 'safe'),
+      videoUrl: `${baseUrl}/api/videos/stream/${video._id}`,
+    }));
+  }, [videos]);
 
   useEffect(() => {
     const flaggedCount = normalizedVideos.filter((video) => video.reviewState === 'flagged').length;
@@ -117,6 +120,17 @@ const Library = () => {
     categoryOptions,
     sortOptions,
   } = useVideoLibraryFilters(normalizedVideos);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="flex flex-col items-center gap-2 text-gray-500">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+          <p>Loading your video library...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (normalizedVideos.length === 0) {
     return (
@@ -226,7 +240,17 @@ const Library = () => {
                   if (video.videoUrl) setPlayingVideo(video);
                 }}
               >
-                {video.thumbnail ? (
+                {video.videoUrl ? (
+                  <video 
+                    src={video.videoUrl} 
+                    className="h-full w-full object-cover" 
+                    preload="metadata"
+                    muted
+                    loop
+                    onMouseEnter={(e) => e.target.play().catch(() => {})}
+                    onMouseLeave={(e) => { e.target.pause(); e.target.currentTime = 0; }}
+                  />
+                ) : video.thumbnail ? (
                   <img src={video.thumbnail} alt={video.title} className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full items-center justify-center text-gray-400">
@@ -287,13 +311,30 @@ const Library = () => {
                 </div>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
                   <span>{formatBytes(video.size)}</span>
-                  <span>{new Date(video.date).toLocaleDateString()}</span>
+                  <span>{new Date(video.createdAt || video.date).toLocaleDateString()}</span>
                   <span>{formatDuration(video.durationSeconds)}</span>
                   <span>{video.category}</span>
                 </div>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Video Player Modal */}
+      {playingVideo && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 sm:p-6" onClick={() => setPlayingVideo(null)}>
+          <button className="absolute right-4 top-4 text-white hover:text-gray-300 transition-colors" onClick={() => setPlayingVideo(null)}>
+            <X size={32} />
+          </button>
+          <div className="w-full max-w-5xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10" onClick={e => e.stopPropagation()}>
+            <video 
+              src={playingVideo.videoUrl} 
+              className="w-full h-full" 
+              controls 
+              autoPlay 
+            />
+          </div>
         </div>
       )}
 

@@ -62,6 +62,8 @@ Thumbs.db
 *.sw?
 
 # Platform specific uploads and temp files
+backend/uploads/*
+!backend/uploads/.gitkeep
 backend/src/uploads/videos/*
 !backend/src/uploads/videos/.gitkeep
 backend/src/uploads/frames/*

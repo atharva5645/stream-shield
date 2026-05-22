@@ -61,7 +61,7 @@ const Dashboard = () => {
           <div className="bg-primary p-1.5 rounded text-on-primary">
             <PlayCircle size={20} />
           </div>
-          <span className="font-bold text-xl tracking-tight text-on-surface">VideoVault</span>
+          <span className="font-bold text-xl tracking-tight text-on-surface">VaultStream</span>
         </div>
 
         <div className="hidden md:flex flex-1 max-w-md mx-8">

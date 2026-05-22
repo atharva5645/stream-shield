@@ -26,6 +26,13 @@ class ErrorBoundary extends React.Component {
               </div>
               <h1 className="mt-5 text-3xl font-bold text-slate-950">Something went wrong</h1>
               <p className="mt-2 text-sm text-slate-500">A runtime error interrupted the app. Refresh to try again, or return later if the problem persists.</p>
+              
+              <div className="mt-4 p-4 bg-rose-50 text-rose-900 text-left text-xs overflow-auto max-h-48 rounded border border-rose-200 whitespace-pre-wrap font-mono">
+                {this.state.error && this.state.error.toString()}
+                {'\n\n'}
+                {this.state.error && this.state.error.stack}
+              </div>
+
               <button type="button" onClick={() => window.location.reload()} className="mt-6 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800">
                 Reload app
               </button>

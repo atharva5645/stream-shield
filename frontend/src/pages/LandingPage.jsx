@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import '@fontsource/geist-sans';
 import { 
-  Play, Activity, PlayCircle, Settings, CheckCircle2, Cloud, ArrowRight, Video
+  Play, Activity, PlayCircle, Settings, CheckCircle2, Cloud, ArrowRight, Video, Lock
 } from 'lucide-react';
+import api from '../api/axios.js';
+import AuthGateModal from '../components/auth/AuthGateModal';
+import { useAuth } from '../context/AuthContext';
 
 const Navbar = () => {
   return (
@@ -14,7 +17,7 @@ const Navbar = () => {
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#6C63FF] to-[#8B5CF6] flex items-center justify-center shadow-sm">
             <Video className="w-5 h-5 text-white" />
           </div>
-          <span className="text-xl font-bold text-slate-900 tracking-tight">VideoVault</span>
+          <span className="text-xl font-bold text-slate-900 tracking-tight">VaultStream</span>
         </div>
         <div className="flex items-center gap-4">
           <Link to="/login" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Sign In</Link>
@@ -125,8 +128,42 @@ const FloatingDashboardMockup = () => {
 };
 
 const LandingPage = () => {
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const [publicVideos, setPublicVideos] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchPublicVideos = async () => {
+      try {
+        const { data } = await api.get('/videos/public');
+        if (data.success) {
+          setPublicVideos(data.videos);
+        }
+      } catch (error) {
+        console.error('Failed to fetch public videos', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPublicVideos();
+  }, []);
+
+  const handleVideoClick = (video) => {
+    if (isAuthenticated) {
+      // User is logged in, take them straight to the video player
+      navigate(`/viewer/watch/${video._id}`);
+    } else {
+      // User is a guest, show the auth gate
+      setSelectedVideo(video);
+      setIsModalOpen(true);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-surface text-slate-900 selection:bg-[#6C63FF]/30 font-body-md overflow-x-hidden flex flex-col">
+    <div className="min-h-screen bg-surface text-slate-900 selection:bg-[#6C63FF]/30 font-body-md overflow-x-hidden flex flex-col relative">
       
       {/* Background Grid */}
       <div className="fixed inset-0 z-0 pointer-events-none bg-[linear-gradient(rgba(0,0,0,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.03)_1px,transparent_1px)] bg-[size:64px_64px]" />
@@ -134,7 +171,7 @@ const LandingPage = () => {
       <Navbar />
 
       {/* Hero Section */}
-      <main className="flex-grow flex items-center pt-20">
+      <main className="flex-grow flex flex-col items-center pt-20">
         <section className="relative px-6 max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-12 z-10 w-full py-16">
           <motion.div className="flex-1 flex flex-col items-start"
             initial={{ opacity: 0, x: -50 }}
@@ -149,17 +186,80 @@ const LandingPage = () => {
               The world's most advanced video infrastructure. Secure streaming, automated AI moderation, and real-time analytics designed for scale.
             </p>
             <div className="flex items-center gap-4">
-              <Link to="/register" className="flex items-center gap-2 bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] text-white px-6 py-3 rounded-full font-medium shadow-lg shadow-[#6C63FF]/30 transition-all transform hover:-translate-y-0.5">
-                Start Building <ArrowRight className="w-4 h-4" />
-              </Link>
+              <button 
+                onClick={() => document.getElementById('library').scrollIntoView({ behavior: 'smooth' })}
+                className="flex items-center gap-2 bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] text-white px-6 py-3 rounded-full font-medium shadow-lg shadow-[#6C63FF]/30 transition-all transform hover:-translate-y-0.5"
+              >
+                Browse Library <ArrowRight className="w-4 h-4" />
+              </button>
               <Link to="/login" className="flex items-center gap-2 bg-white border border-gray-200 text-slate-700 px-6 py-3 rounded-full font-medium hover:bg-gray-50 transition-colors shadow-sm">
-                <Play className="w-4 h-4" /> View Demo
+                <Play className="w-4 h-4" /> Sign In
               </Link>
             </div>
           </motion.div>
 
           <div className="flex-1 flex justify-center lg:justify-end w-full">
             <FloatingDashboardMockup />
+          </div>
+        </section>
+
+        {/* Public Library Section */}
+        <section id="library" className="w-full bg-slate-50 border-t border-gray-200 py-24 z-10">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="mb-12 flex flex-col items-center text-center">
+              <h2 className="text-3xl font-bold tracking-tight text-slate-900 mb-4" style={{ fontFamily: '"Geist Sans", sans-serif' }}>
+                Featured Content
+              </h2>
+              <p className="text-slate-500 max-w-2xl">
+                Explore our public library of secure, AI-moderated video content. Sign in to watch full episodes and unlock advanced features.
+              </p>
+            </div>
+
+            {loading ? (
+              <div className="flex justify-center py-20">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#6C63FF]"></div>
+              </div>
+            ) : publicVideos.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {publicVideos.map((video) => (
+                  <motion.div 
+                    key={video._id}
+                    whileHover={{ y: -5 }}
+                    onClick={() => handleVideoClick(video)}
+                    className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-xl hover:border-[#6C63FF]/30 transition-all cursor-pointer group"
+                  >
+                    {/* Thumbnail Area */}
+                    <div className="aspect-video bg-slate-900 relative overflow-hidden flex items-center justify-center">
+                      <PlayCircle className="w-12 h-12 text-white/50 group-hover:scale-110 group-hover:text-white transition-all duration-300" />
+                      
+                      {/* Lock overlay hint */}
+                      <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-sm text-white text-xs font-medium px-2 py-1 rounded-md flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Lock size={12} />
+                        Sign in to watch
+                      </div>
+                    </div>
+                    
+                    {/* Details Area */}
+                    <div className="p-5">
+                      <h3 className="font-semibold text-slate-900 mb-1 line-clamp-1">{video.title}</h3>
+                      <p className="text-sm text-slate-500 line-clamp-2 mb-4">{video.description || 'No description provided.'}</p>
+                      <div className="flex items-center gap-2 text-xs text-slate-400">
+                        <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold">
+                          {video.uploadedBy?.name?.charAt(0) || 'U'}
+                        </div>
+                        <span>{video.uploadedBy?.name || 'Unknown User'}</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-300">
+                <Video className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <h3 className="text-lg font-medium text-slate-900">No public videos yet</h3>
+                <p className="text-slate-500">Check back later for new content.</p>
+              </div>
+            )}
           </div>
         </section>
       </main>
@@ -171,13 +271,20 @@ const LandingPage = () => {
             <div className="w-6 h-6 rounded bg-gradient-to-br from-[#6C63FF] to-[#8B5CF6] flex items-center justify-center">
               <Video className="w-3 h-3 text-white" />
             </div>
-            <span className="font-bold text-slate-900">VideoVault</span>
+            <span className="font-bold text-slate-900">VaultStream</span>
           </div>
           <div className="text-sm text-slate-500">
-            © 2026 VideoVault Inc. All rights reserved.
+            © 2026 VaultStream Inc. All rights reserved.
           </div>
         </div>
       </footer>
+
+      {/* Auth Gate Modal */}
+      <AuthGateModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        video={selectedVideo} 
+      />
     </div>
   );
 };

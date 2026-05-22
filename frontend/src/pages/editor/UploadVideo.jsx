@@ -38,7 +38,7 @@ const UploadVideo = () => {
           </div>
           <h2 className="mt-3 text-3xl font-bold text-slate-950">Upload Video</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            This upload experience uses a mocked Axios transport layer for now so we can ship the full queue UI, progress tracking, cancellation, retry, and local thumbnail workflow before the backend ingest endpoint is ready.
+            Upload videos securely to your workspace. Supports concurrent uploads, real-time progress tracking, auto-retry, and post-upload AI processing.
           </p>
         </div>
 

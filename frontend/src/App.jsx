@@ -46,7 +46,7 @@ const AnimatedRoutes = ({ isAuthenticated, role, getDashboardPath }) => {
 
   return (
       <Routes location={location} key={location.pathname}>
-        <Route path="/" element={!isAuthenticated ? <LandingPage /> : <Navigate to={getDashboardPath()} replace />} />
+        <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to={getDashboardPath()} replace />} />
         <Route path="/admin/login" element={!isAuthenticated ? <AdminLogin /> : <Navigate to={getDashboardPath()} replace />} />
         <Route path="/register" element={!isAuthenticated ? <Register /> : <Navigate to={getDashboardPath()} replace />} />

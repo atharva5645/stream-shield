@@ -13,15 +13,17 @@ import {
   UploadCloud,
   Video,
 } from 'lucide-react';
-import { useSocket, STAGES } from '../../context/SocketContext';
+import { useSocket } from '../../context/SocketContext';
 import { useTenant } from '../../context/TenantContext';
 import { formatBytes, formatDuration } from '../../hooks/useVideoValidation';
 
-const STORAGE_KEY = 'mockVideos';
+import api from '../../api/axios';
 
 const STATUS_STYLES = {
-  processed: 'bg-emerald-100 text-emerald-700',
+  ready: 'bg-emerald-100 text-emerald-700',
+  completed: 'bg-emerald-100 text-emerald-700',
   processing: 'bg-amber-100 text-amber-700',
+  uploading: 'bg-sky-100 text-sky-700',
   failed: 'bg-rose-100 text-rose-700',
 };
 
@@ -32,14 +34,6 @@ const formatDate = (dateValue) => {
     day: 'numeric',
     year: 'numeric',
   });
-};
-
-const getLibraryVideos = () => {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-  } catch {
-    return [];
-  }
 };
 
 const DashboardCard = ({ icon: Icon, label, value, hint, tone = 'slate' }) => {
@@ -67,62 +61,73 @@ const DashboardCard = ({ icon: Icon, label, value, hint, tone = 'slate' }) => {
 };
 
 const EditorDashboard = () => {
-  const [videos, setVideos] = useState([]);
-  const { queue, retryProcessing } = useSocket();
+  const [stats, setStats] = useState({
+    totalVideos: 0,
+    readyVideos: 0,
+    activePipeline: 0,
+    failedPipeline: 0,
+    storageUsed: 0,
+    totalDurationSeconds: 0,
+  });
+  const [recentVideos, setRecentVideos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const { currentTenant } = useTenant();
 
   useEffect(() => {
-    const syncVideos = () => {
-      const storedVideos = getLibraryVideos()
-        .filter((video) => !video.tenantId || video.tenantId === currentTenant?.id)
-        .slice()
-        .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-      setVideos(storedVideos);
+    const fetchDashboardData = async () => {
+      setLoading(true);
+      try {
+        // Fetch stats and recent uploads concurrently
+        const [statsRes, recentRes] = await Promise.all([
+          api.get('/dashboard/stats'),
+          api.get('/dashboard/recent?limit=4'),
+        ]);
+
+        if (statsRes.data.success) {
+          const s = statsRes.data.stats;
+          setStats({
+            totalVideos: s.totalVideos,
+            readyVideos: s.statusCounts?.ready || s.statusCounts?.completed || 0,
+            activePipeline: (s.statusCounts?.processing || 0) + (s.statusCounts?.uploading || 0),
+            failedPipeline: s.statusCounts?.failed || 0,
+            storageUsed: s.totalStorageBytes || 0,
+            totalDurationSeconds: s.totalDurationSeconds || 0,
+          });
+        }
+
+        if (recentRes.data.success) {
+          setRecentVideos(recentRes.data.videos);
+        }
+      } catch (err) {
+        console.error('Failed to fetch dashboard data:', err);
+        setError('Unable to load dashboard data. Please try again.');
+      } finally {
+        setLoading(false);
+      }
     };
 
-    syncVideos();
-    window.addEventListener('storage', syncVideos);
-
-    return () => window.removeEventListener('storage', syncVideos);
+    fetchDashboardData();
   }, [currentTenant]);
 
-  const stats = useMemo(() => {
-    const totalVideos = videos.length;
-    const readyVideos = videos.filter((video) => (video.status || '').toLowerCase() === 'processed').length;
-    const storageUsed = videos.reduce((sum, video) => sum + (video.size || 0), 0);
-    const totalDurationSeconds = videos.reduce((sum, video) => sum + (video.duration || 0), 0);
-    const activePipeline = queue.filter((item) => item.status === 'processing').length;
-    const failedPipeline = queue.filter((item) => item.status === 'failed').length;
-
-    return {
-      totalVideos,
-      readyVideos,
-      storageUsed,
-      totalDurationSeconds,
-      activePipeline,
-      failedPipeline,
-    };
-  }, [queue, videos]);
-
-  const recentVideos = useMemo(() => videos.slice(0, 4), [videos]);
-
   const attentionItems = useMemo(() => {
-    const failedProcessing = queue
-      .filter((item) => item.status === 'failed')
-      .map((item) => ({
-        id: `failed-${item.id}`,
-        title: item.title,
-        detail: item.error || 'Processing needs another pass.',
+    // We could fetch real queue errors here if needed, but for now we'll use recent videos that failed
+    const failedProcessing = recentVideos
+      .filter((video) => video.status === 'failed')
+      .map((video) => ({
+        id: `failed-${video._id}`,
+        title: video.title || video.originalName,
+        detail: 'Processing needs another pass.',
         kind: 'failed',
         actionLabel: 'Retry',
-        onAction: () => retryProcessing(item.id),
+        onAction: () => console.log('Retry', video._id), // Placeholder for retry
       }));
 
-    const metadataGaps = videos
+    const metadataGaps = recentVideos
       .filter((video) => !video.title || video.title.trim().length < 3)
       .map((video) => ({
-        id: `metadata-${video.id}`,
-        title: video.fileName || 'Untitled upload',
+        id: `metadata-${video._id}`,
+        title: video.originalName || 'Untitled upload',
         detail: 'This upload still needs a stronger title before publishing.',
         kind: 'warning',
         actionHref: '/editor/library',
@@ -130,7 +135,7 @@ const EditorDashboard = () => {
       }));
 
     return [...failedProcessing, ...metadataGaps].slice(0, 4);
-  }, [queue, retryProcessing, videos]);
+  }, [recentVideos]);
 
   const featuredVideo = recentVideos[0];
 
@@ -217,14 +222,32 @@ const EditorDashboard = () => {
               </Link>
             </div>
 
-            {recentVideos.length ? (
+            {loading ? (
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                {[1, 2, 3, 4].map((n) => (
+                  <div key={n} className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 animate-pulse">
+                    <div className="aspect-video bg-slate-200"></div>
+                    <div className="p-4 space-y-3">
+                      <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                      <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                      <div className="h-2 bg-slate-200 rounded w-full mt-4"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : error ? (
+              <div className="mt-5 rounded-3xl border border-rose-200 bg-rose-50 px-6 py-10 text-center text-rose-600">
+                <AlertTriangle size={24} className="mx-auto mb-2" />
+                {error}
+              </div>
+            ) : recentVideos.length ? (
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 {recentVideos.map((video) => {
-                  const normalizedStatus = (video.status || 'processed').toLowerCase();
-                  const statusTone = STATUS_STYLES[normalizedStatus] || STATUS_STYLES.processed;
+                  const normalizedStatus = (video.status || 'completed').toLowerCase();
+                  const statusTone = STATUS_STYLES[normalizedStatus] || STATUS_STYLES.completed;
 
                   return (
-                    <article key={video.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
+                    <article key={video._id} className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
                       <div className="aspect-video bg-slate-200">
                         {video.thumbnail ? (
                           <img src={video.thumbnail} alt={video.title} className="h-full w-full object-cover" />
@@ -237,16 +260,16 @@ const EditorDashboard = () => {
                       <div className="p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <h3 className="truncate text-base font-semibold text-slate-900">{video.title || video.fileName || 'Untitled upload'}</h3>
-                            <p className="mt-1 truncate text-sm text-slate-500">{video.fileName}</p>
+                            <h3 className="truncate text-base font-semibold text-slate-900">{video.title || video.originalName || 'Untitled upload'}</h3>
+                            <p className="mt-1 truncate text-sm text-slate-500">{video.originalName}</p>
                           </div>
                           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusTone}`}>
-                            {video.status || 'Processed'}
+                            {video.status || 'Completed'}
                           </span>
                         </div>
                         <div className="mt-4 flex flex-wrap gap-3 text-xs text-slate-500">
                           <span>{formatBytes(video.size || 0)}</span>
-                          <span>{formatDate(video.date)}</span>
+                          <span>{formatDate(video.createdAt)}</span>
                           {video.duration ? <span>{formatDuration(video.duration)}</span> : null}
                         </div>
                       </div>
@@ -311,40 +334,26 @@ const EditorDashboard = () => {
             </div>
 
             <div className="mt-5 space-y-4">
-              {queue.length ? (
-                queue.slice(0, 4).map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              {loading ? (
+                 <div className="animate-pulse space-y-4">
+                    <div className="h-16 bg-slate-50 rounded-2xl border border-slate-200"></div>
+                    <div className="h-16 bg-slate-50 rounded-2xl border border-slate-200"></div>
+                 </div>
+              ) : recentVideos.filter(v => ['uploading', 'processing'].includes(v.status)).length ? (
+                recentVideos.filter(v => ['uploading', 'processing'].includes(v.status)).slice(0, 4).map((item) => (
+                  <div key={item._id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h3 className="truncate font-semibold text-slate-900">{item.title}</h3>
-                        <p className="mt-1 text-sm text-slate-500">
-                          {item.status === 'processing' ? STAGES[item.stage] || 'Processing' : item.status}
+                        <p className="mt-1 text-sm text-slate-500 capitalize">
+                          {item.status}
                         </p>
                       </div>
-                      <span className="text-sm font-semibold text-slate-700">{item.progress}%</span>
+                      <span className="text-sm font-semibold text-slate-700">In Progress</span>
                     </div>
                     <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
-                      <div
-                        className={`h-full rounded-full ${
-                          item.status === 'failed'
-                            ? 'bg-rose-500'
-                            : item.status === 'completed'
-                              ? 'bg-emerald-500'
-                              : 'bg-sky-500'
-                        }`}
-                        style={{ width: `${item.progress}%` }}
-                      />
+                      <div className="h-full rounded-full bg-sky-500 w-1/2 animate-pulse" />
                     </div>
-                    {item.status === 'failed' ? (
-                      <button
-                        type="button"
-                        onClick={() => retryProcessing(item.id)}
-                        className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-rose-700 hover:text-rose-800"
-                      >
-                        <RefreshCw size={14} />
-                        Retry failed processing
-                      </button>
-                    ) : null}
                   </div>
                 ))
               ) : (
@@ -411,9 +420,9 @@ const EditorDashboard = () => {
               </div>
               <div className="p-5">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Latest delivery</p>
-                <h2 className="mt-3 text-xl font-bold text-slate-950">{featuredVideo.title || featuredVideo.fileName || 'Untitled upload'}</h2>
+                <h2 className="mt-3 text-xl font-bold text-slate-950">{featuredVideo.title || featuredVideo.originalName || 'Untitled upload'}</h2>
                 <p className="mt-2 text-sm text-slate-500">
-                  Added {formatDate(featuredVideo.date)} with {formatBytes(featuredVideo.size || 0)} ready for your library workflow.
+                  Added {formatDate(featuredVideo.createdAt)} with {formatBytes(featuredVideo.size || 0)} ready for your library workflow.
                 </p>
               </div>
             </div>

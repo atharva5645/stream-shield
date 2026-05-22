@@ -36,7 +36,7 @@ const DashboardLayout = ({ navigationParams }) => {
             <div className="rounded-lg bg-indigo-600 p-1.5 text-white">
               <PlayCircle size={24} />
             </div>
-            <span className="text-xl font-bold tracking-tight text-gray-900">StreamOps</span>
+            <span className="text-xl font-bold tracking-tight text-gray-900">VaultStream</span>
           </NavLink>
         </div>
 

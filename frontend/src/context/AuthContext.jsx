@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import api from '../api/axios.js';
 
 const AuthContext = createContext();
 
@@ -7,66 +8,121 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
-  const [role, setRole] = useState(null); // 'viewer', 'editor', 'admin'
-  const [permissions, setPermissions] = useState([]);
+  const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Check localStorage on mount
+  // ─── Restore session from localStorage on page load ───
   useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem('user');
-      const storedToken = localStorage.getItem('token');
-      if (storedUser && storedToken && storedUser !== 'undefined') {
+    const restoreSession = async () => {
+      try {
+        const storedToken = localStorage.getItem('token');
+        const storedUser = localStorage.getItem('user');
+
+        if (!storedToken || !storedUser || storedUser === 'undefined') {
+          return;
+        }
+
         const parsedUser = JSON.parse(storedUser);
         setUser(parsedUser);
         setToken(storedToken);
         setRole(parsedUser.role);
-        setPermissions(parsedUser.permissions || []);
+
+        // Verify token is still valid with the backend
+        const { data } = await api.get('/auth/me');
+        const freshUser = data.user;
+
+        // Update with fresh data from server
+        setUser(freshUser);
+        setRole(freshUser.role);
+        localStorage.setItem('user', JSON.stringify(freshUser));
+
+      } catch (error) {
+        // Token expired or invalid — clear everything
+        console.warn('Session restore failed, clearing auth state.');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setUser(null);
+        setToken(null);
+        setRole(null);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Failed to parse stored user:', error);
-      // Clear invalid state
-      localStorage.removeItem('user');
-      localStorage.removeItem('token');
-    } finally {
-      setLoading(false);
-    }
+    };
+
+    restoreSession();
   }, []);
 
-  const login = (userData, authToken) => {
-    setUser(userData);
-    setToken(authToken);
-    setRole(userData.role);
-    setPermissions(userData.permissions || []);
-    localStorage.setItem('user', JSON.stringify(userData));
-    localStorage.setItem('token', authToken);
-  };
+  // ─── Register: Create new account ───
+  const register = useCallback(async ({ name, email, password, role: userRole }) => {
+    const { data } = await api.post('/auth/register', {
+      name,
+      email,
+      password,
+      role: userRole,
+    });
 
-  const logout = () => {
+    const { token: newToken, user: newUser } = data;
+
+    localStorage.setItem('token', newToken);
+    localStorage.setItem('user', JSON.stringify(newUser));
+
+    setToken(newToken);
+    setUser(newUser);
+    setRole(newUser.role);
+
+    return newUser;
+  }, []);
+
+  // ─── Login: Authenticate existing user ───
+  const login = useCallback(async ({ email, password }) => {
+    const { data } = await api.post('/auth/login', { email, password });
+
+    const { token: newToken, user: newUser } = data;
+
+    localStorage.setItem('token', newToken);
+    localStorage.setItem('user', JSON.stringify(newUser));
+
+    setToken(newToken);
+    setUser(newUser);
+    setRole(newUser.role);
+
+    return newUser;
+  }, []);
+
+  // ─── Logout: Clear session ───
+  const logout = useCallback(() => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setUser(null);
     setToken(null);
     setRole(null);
-    setPermissions([]);
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-  };
+  }, []);
 
-  const hasPermission = (permission) => {
-    if (role === 'admin') return true; // Admins have all permissions
-    return permissions.includes(permission);
-  };
+  // ─── Role-based permission check ───
+  const hasPermission = useCallback((permission) => {
+    if (role === 'admin') return true;
+    const permMap = {
+      viewer: ['watch_video'],
+      editor: ['watch_video', 'upload_video', 'edit_video'],
+    };
+    return (permMap[role] || []).includes(permission);
+  }, [role]);
 
   const value = {
     user,
     token,
     role,
-    permissions,
     isAuthenticated: !!user,
     loading,
     login,
+    register,
     logout,
-    hasPermission
+    hasPermission,
   };
 
-  return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {!loading && children}
+    </AuthContext.Provider>
+  );
 };

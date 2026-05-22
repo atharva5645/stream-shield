@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useNotifications } from './NotificationContext';
+import { useAuth } from './AuthContext';
 
 const SocketContext = createContext();
 
@@ -18,6 +19,7 @@ export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider = ({ children }) => {
   const { notifyError, notifySuccess, notifyWarning } = useNotifications();
+  const { user } = useAuth();
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   
@@ -25,7 +27,7 @@ export const SocketProvider = ({ children }) => {
   const [activityFeed, setActivityFeed] = useState([]);
   
   // Toggle simulation mode
-  const [isSimulating, setIsSimulating] = useState(true);
+  const [isSimulating, setIsSimulating] = useState(false);
 
   // Initialize socket connection
   useEffect(() => {
@@ -39,6 +41,9 @@ export const SocketProvider = ({ children }) => {
     newSocket.on('connect', () => {
       setIsConnected(true);
       notifySuccess('System alert', 'Realtime connection restored.', false);
+      if (user?._id) {
+        newSocket.emit('join-user-room', user._id);
+      }
     });
     newSocket.on('disconnect', () => {
       setIsConnected(false);
@@ -46,15 +51,15 @@ export const SocketProvider = ({ children }) => {
     });
 
     // Handle real events if they come in
-    newSocket.on('processing_started', (data) => handleProcessingStarted(data));
-    newSocket.on('processing_progress', (data) => handleProcessingProgress(data));
-    newSocket.on('processing_completed', (data) => handleProcessingCompleted(data));
-    newSocket.on('processing_failed', (data) => handleProcessingFailed(data));
+    newSocket.on('processing-started', (data) => handleProcessingStarted(data));
+    newSocket.on('processing-progress', (data) => handleProcessingProgress(data));
+    newSocket.on('processing-completed', (data) => handleProcessingCompleted(data));
+    newSocket.on('processing-failed', (data) => handleProcessingFailed(data));
 
     setSocket(newSocket);
 
     return () => newSocket.close();
-  }, [notifySuccess, notifyWarning]);
+  }, [notifySuccess, notifyWarning, user?._id]);
 
   // Utility to add to activity feed
   const logActivity = useCallback((type, message, videoId) => {
