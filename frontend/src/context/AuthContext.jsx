@@ -98,6 +98,15 @@ export const AuthProvider = ({ children }) => {
     setRole(null);
   }, []);
 
+  // ─── Set Auth Data dynamically (e.g. on role upgrade) ───
+  const setAuthData = useCallback((newUser, newToken) => {
+    localStorage.setItem('token', newToken);
+    localStorage.setItem('user', JSON.stringify(newUser));
+    setToken(newToken);
+    setUser(newUser);
+    setRole(newUser.role);
+  }, []);
+
   // ─── Role-based permission check ───
   const hasPermission = useCallback((permission) => {
     if (role === 'admin') return true;
@@ -118,6 +127,7 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     hasPermission,
+    setAuthData,
   };
 
   return (

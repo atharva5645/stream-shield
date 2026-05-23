@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { io } from 'socket.io-client';
 import { useNotifications } from './NotificationContext';
 import { useAuth } from './AuthContext';
+import api from '../api/axios';
 
 const SocketContext = createContext();
 
@@ -18,8 +19,8 @@ export const STAGES = [
 export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider = ({ children }) => {
-  const { notifyError, notifySuccess, notifyWarning } = useNotifications();
-  const { user } = useAuth();
+  const { notifyError, notifySuccess, notifyWarning, push, fetchNotifications } = useNotifications();
+  const { user, setAuthData } = useAuth();
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   
@@ -31,8 +32,10 @@ export const SocketProvider = ({ children }) => {
 
   // Initialize socket connection
   useEffect(() => {
-    // We connect to the backend URL, falling back to localhost if not found
-    const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    // Strip /api suffix if present — socket connects to the base server URL, not the REST API path
+    const rawUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const backendUrl = rawUrl.replace(/\/api\/?$/, '');
+
     const newSocket = io(backendUrl, {
       autoConnect: true,
       reconnection: true,
@@ -41,8 +44,8 @@ export const SocketProvider = ({ children }) => {
     newSocket.on('connect', () => {
       setIsConnected(true);
       notifySuccess('System alert', 'Realtime connection restored.', false);
-      if (user?._id) {
-        newSocket.emit('join-user-room', user._id);
+      if (user?.id) {
+        newSocket.emit('join-user-room', user.id);
       }
     });
     newSocket.on('disconnect', () => {
@@ -55,11 +58,38 @@ export const SocketProvider = ({ children }) => {
     newSocket.on('processing-progress', (data) => handleProcessingProgress(data));
     newSocket.on('processing-completed', (data) => handleProcessingCompleted(data));
     newSocket.on('processing-failed', (data) => handleProcessingFailed(data));
+    newSocket.on('new-notification', async (data) => {
+      // Add the incoming notification to the bell dropdown (sticky = goes to bell only, no floating toast)
+      push({...data, id: data._id, sticky: true});
+
+      // Also re-fetch all notifications from DB to stay in sync
+      fetchNotifications();
+
+      // If this is a role approval, re-fetch the user profile so UI updates
+      if (data.title?.includes('Granted') || data.title?.includes('Access')) {
+        try {
+          const { data: profileData } = await api.get('/auth/me');
+          if (profileData?.user && setAuthData) {
+            const freshToken = localStorage.getItem('token');
+            setAuthData(profileData.user, freshToken);
+          }
+        } catch (e) {
+          console.warn('Could not refresh profile after role change', e);
+        }
+      }
+    });
 
     setSocket(newSocket);
 
     return () => newSocket.close();
-  }, [notifySuccess, notifyWarning, user?._id]);
+  }, [notifySuccess, notifyWarning, push]);
+
+  // Join user-specific room whenever user.id becomes available (handles post-login state)
+  useEffect(() => {
+    if (socket && user?.id && socket.connected) {
+      socket.emit('join-user-room', user.id);
+    }
+  }, [socket, user?.id]);
 
   // Utility to add to activity feed
   const logActivity = useCallback((type, message, videoId) => {

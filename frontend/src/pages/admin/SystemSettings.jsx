@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Bell, CheckCircle2, Copy, Globe2, Lock, Plus, Server, Shield, Trash2 } from 'lucide-react';
+import { Bell, CheckCircle2, Copy, Globe2, Lock, Plus, Server, Shield, Trash2, Key } from 'lucide-react';
 import AdminShell from '../../components/admin/AdminShell';
+import api from '../../api/axios.js';
 
 const SystemSettings = () => {
   const [activeTab, setActiveTab] = useState('platform');
@@ -15,6 +16,35 @@ const SystemSettings = () => {
   ]);
   const [newKeyName, setNewKeyName] = useState('');
   const [copiedId, setCopiedId] = useState(null);
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordStatus, setPasswordStatus] = useState({ type: '', message: '' });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      setPasswordStatus({ type: 'error', message: 'New passwords do not match.' });
+      return;
+    }
+    
+    setIsChangingPassword(true);
+    setPasswordStatus({ type: '', message: '' });
+    
+    try {
+      await api.put('/auth/password', { currentPassword, newPassword });
+      setPasswordStatus({ type: 'success', message: 'Password updated successfully.' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error) {
+      setPasswordStatus({ type: 'error', message: error.response?.data?.message || 'Failed to change password.' });
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
 
   const tabs = [
     { id: 'platform', label: 'Platform', icon: Globe2 },
@@ -110,6 +140,59 @@ const SystemSettings = () => {
                   <div className="font-semibold text-slate-900">Session timeout</div>
                   <div className="mt-1 text-sm text-slate-500">Automatically expire admin sessions after 30 minutes of inactivity.</div>
                 </div>
+              </div>
+              
+              <div className="rounded-2xl border border-slate-200 p-6 mt-6 bg-white shadow-sm">
+                <div className="flex items-center gap-3 mb-6">
+                  <Key size={20} className="text-slate-700" />
+                  <h3 className="text-lg font-semibold text-slate-900">Change Password</h3>
+                </div>
+                <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
+                  {passwordStatus.message && (
+                    <div className={`p-4 rounded-xl text-sm font-medium ${passwordStatus.type === 'error' ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
+                      {passwordStatus.message}
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Current Password</label>
+                    <input 
+                      type="password" 
+                      required 
+                      value={currentPassword}
+                      onChange={e => setCurrentPassword(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all bg-slate-50 focus:bg-white" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">New Password</label>
+                    <input 
+                      type="password" 
+                      required 
+                      minLength={6}
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all bg-slate-50 focus:bg-white" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Confirm New Password</label>
+                    <input 
+                      type="password" 
+                      required 
+                      minLength={6}
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all bg-slate-50 focus:bg-white" 
+                    />
+                  </div>
+                  <button 
+                    type="submit" 
+                    disabled={isChangingPassword}
+                    className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-70 transition-all mt-2"
+                  >
+                    {isChangingPassword ? 'Updating...' : 'Update Password'}
+                  </button>
+                </form>
               </div>
             </div>
           ) : null}

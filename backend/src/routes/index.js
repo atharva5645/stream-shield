@@ -3,14 +3,18 @@ import authRoutes from './authRoutes.js';
 import videoRoutes from './videoRoutes.js';
 import streamRoutes from './streamRoutes.js';
 import dashboardRoutes from './dashboardRoutes.js';
+import notificationRoutes from './notificationRoutes.js';
+import adminRoutes from './adminRoutes.js';
 
 const router = express.Router();
 
-// Mount routers
+// Mount routes
 router.use('/auth', authRoutes);
 router.use('/videos', videoRoutes);
-router.use('/stream', streamRoutes);
+router.use('/videos/stream', streamRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/notifications', notificationRoutes);
+router.use('/admin', adminRoutes);
 
 /**
  * @route GET /api/health

@@ -7,13 +7,13 @@ import UploadDropzone from '../../components/upload/UploadDropzone';
 import UploadQueue from '../../components/upload/UploadQueue';
 import ValidationAlert from '../../components/upload/ValidationAlert';
 import useVideoValidation from '../../hooks/useVideoValidation';
-import useUploadQueue from '../../hooks/useUploadQueue';
+import { useUploadQueueContext } from '../../context/UploadQueueContext';
 
 const UploadVideo = () => {
   const [validationAlerts, setValidationAlerts] = useState([]);
   const { role } = useAuth();
   const { limits, validateFiles } = useVideoValidation();
-  const { queue, stats, addFiles, updateTitle, cancelUpload, retryUpload, removeFile, clearCompleted } = useUploadQueue();
+  const { queue, stats, addFiles, updateTitle, cancelUpload, retryUpload, removeFile, clearCompleted } = useUploadQueueContext();
 
   const handleFilesSelected = async (files) => {
     const { accepted, rejected } = await validateFiles(files);

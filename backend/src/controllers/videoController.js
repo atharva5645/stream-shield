@@ -4,6 +4,8 @@ import {
 } from '../sockets/socketHandler.js';
 import { processVideoAsync } from '../services/videoProcessor.js';
 import { buildTenantFilter } from '../middleware/tenantMiddleware.js';
+import Notification from '../models/Notification.js';
+import { emitNotification } from '../sockets/socketHandler.js';
 
 // ─────────────────────────────────────────────
 // @desc    Upload a new video
@@ -144,6 +146,36 @@ export const getPublicVideos = async (req, res, next) => {
 };
 
 // ─────────────────────────────────────────────
+// @desc    Get single public video by ID (NO AUTH REQUIRED)
+// @route   GET /api/videos/public/:id
+// @access  Public
+// ─────────────────────────────────────────────
+export const getPublicVideoById = async (req, res, next) => {
+  try {
+    const filter = {
+      _id: req.params.id,
+      status: 'completed',
+      sensitivity: 'safe'
+    };
+
+    const video = await Video.findOne(filter)
+      .populate('uploadedBy', 'name avatar');
+
+    if (!video) {
+      res.status(404);
+      return next(new Error('Video not found or is not publicly available'));
+    }
+
+    res.status(200).json({
+      success: true,
+      video,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─────────────────────────────────────────────
 // @desc    Delete video by ID
 // @route   DELETE /api/videos/:id
 // @access  Private
@@ -175,6 +207,102 @@ export const deleteVideo = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'Video deleted successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─────────────────────────────────────────────
+// @desc    Get all videos globally (Admin only)
+// @route   GET /api/videos/admin/all
+// @access  Private/Admin
+// ─────────────────────────────────────────────
+export const getAdminAllVideos = async (req, res, next) => {
+  try {
+    const videos = await Video.find()
+      .populate('uploadedBy', 'name email avatar')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: videos.length,
+      videos,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─────────────────────────────────────────────
+// @desc    Update video globally (Admin only)
+// @route   PUT /api/videos/admin/:id
+// @access  Private/Admin
+// ─────────────────────────────────────────────
+export const updateAdminVideo = async (req, res, next) => {
+  try {
+    const { title, description } = req.body;
+    const video = await Video.findById(req.params.id);
+
+    if (!video) {
+      res.status(404);
+      return next(new Error('Video not found'));
+    }
+
+    if (title) video.title = title;
+    if (description !== undefined) video.description = description;
+
+    const updatedVideo = await video.save();
+
+    res.status(200).json({
+      success: true,
+      video: updatedVideo,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─────────────────────────────────────────────
+// @desc    Delete video globally (Admin only)
+// @route   DELETE /api/videos/admin/:id
+// @access  Private/Admin
+// ─────────────────────────────────────────────
+export const deleteAdminVideo = async (req, res, next) => {
+  try {
+    const video = await Video.findById(req.params.id);
+
+    if (!video) {
+      res.status(404);
+      return next(new Error('Video not found'));
+    }
+
+    if (video.path) {
+      try {
+        await fs.unlink(video.path);
+      } catch (err) {
+        console.error(`Could not delete file ${video.path}:`, err.message);
+      }
+    }
+
+    await video.deleteOne();
+
+    // Create a notification for the uploader
+    const notification = await Notification.create({
+      userId: video.uploadedBy,
+      title: 'Video Deleted',
+      message: `Your video "${video.title}" has been deleted by an administrator.`,
+      type: 'warning',
+    });
+
+    const io = req.app.get('io');
+    if (io) {
+      emitNotification(io, video.uploadedBy.toString(), notification);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Video deleted successfully by admin',
     });
   } catch (error) {
     next(error);

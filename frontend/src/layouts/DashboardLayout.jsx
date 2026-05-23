@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate, Outlet, NavLink } from 'react-router-dom';
-import { PlayCircle, LogOut, Menu, Settings as SettingsIcon, User } from 'lucide-react';
+import { PlayCircle, LogOut, Menu, Settings as SettingsIcon, User, UploadCloud } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import TenantSwitcher from '../components/tenant/TenantSwitcher';
 import NotificationCenter from '../components/feedback/NotificationCenter';
@@ -8,7 +8,7 @@ import BottomNavigation from '../components/navigation/BottomNavigation';
 import useKeyboardShortcuts from '../hooks/useKeyboardShortcuts';
 
 const DashboardLayout = ({ navigationParams }) => {
-  const { user, logout, role } = useAuth();
+  const { user, logout, role, setAuthData } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -87,10 +87,11 @@ const DashboardLayout = ({ navigationParams }) => {
 
           <div className="flex items-center gap-2 md:gap-4 lg:gap-6">
             <NotificationCenter />
-            <button type="button" onClick={() => navigate(`/${role}/settings`)} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-50 hover:text-indigo-600">
-              <SettingsIcon size={20} />
-            </button>
-            <div className="flex items-center gap-2 border-l border-gray-200 pl-3 md:gap-3 md:pl-4 lg:pl-6">
+            <button 
+              type="button" 
+              onClick={() => navigate(`/${role}/settings`)} 
+              className="flex items-center gap-2 border-l border-gray-200 pl-3 md:gap-3 md:pl-4 lg:pl-6 text-left hover:opacity-80 transition-opacity"
+            >
               <div className="flex h-8 w-8 items-center justify-center rounded-full border border-indigo-200 bg-indigo-100 font-bold text-indigo-700 shadow-sm">
                 {user?.name?.charAt(0) || <User size={16} />}
               </div>
@@ -98,7 +99,7 @@ const DashboardLayout = ({ navigationParams }) => {
                 <div className="mb-1 text-sm font-bold leading-none text-gray-900">{user?.name || 'User'}</div>
                 <div className="text-xs font-semibold capitalize leading-none text-indigo-600">{role}</div>
               </div>
-            </div>
+            </button>
           </div>
         </header>
 

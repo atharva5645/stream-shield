@@ -10,6 +10,7 @@ import SuspenseFallback from './components/system/SuspenseFallback';
 import CommandPalette from './components/system/CommandPalette';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
 import { useTheme } from './hooks/useTheme';
+import { UploadQueueProvider } from './context/UploadQueueContext';
 
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const Login = lazy(() => import('./pages/Login'));
@@ -34,12 +35,14 @@ const VideoAnalytics = lazy(() => import('./pages/editor/VideoAnalytics'));
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const ManageUsers = lazy(() => import('./pages/admin/ManageUsers'));
 const ManageTenants = lazy(() => import('./pages/admin/ManageTenants'));
+const ManageVideos = lazy(() => import('./pages/admin/ManageVideos'));
 const Moderation = lazy(() => import('./pages/admin/Moderation'));
 const SystemSettings = lazy(() => import('./pages/SystemSettings'));
 const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'));
 const ProcessingDashboard = lazy(() => import('./pages/admin/ProcessingDashboard'));
 const AnalyticsDashboard = lazy(() => import('./pages/admin/AnalyticsDashboard'));
 const AdminSystemSettings = lazy(() => import('./pages/admin/SystemSettings'));
+const PublicLibrary = lazy(() => import('./pages/PublicLibrary'));
 
 const AnimatedRoutes = ({ isAuthenticated, role, getDashboardPath }) => {
   const location = useLocation();
@@ -51,6 +54,8 @@ const AnimatedRoutes = ({ isAuthenticated, role, getDashboardPath }) => {
         <Route path="/admin/login" element={!isAuthenticated ? <AdminLogin /> : <Navigate to={getDashboardPath()} replace />} />
         <Route path="/register" element={!isAuthenticated ? <Register /> : <Navigate to={getDashboardPath()} replace />} />
         <Route path="/unauthorized" element={<Unauthorized />} />
+        <Route path="/browse" element={<PublicLibrary />} />
+        <Route path="/watch/:id" element={<WatchVideo />} />
 
         <Route element={<ProtectedRoute />}>
           <Route element={<RoleGuard allowedRoles={['viewer', 'admin']} />}>
@@ -82,11 +87,12 @@ const AnimatedRoutes = ({ isAuthenticated, role, getDashboardPath }) => {
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<AdminDashboard />} />
               <Route path="users" element={<ManageUsers />} />
-              {/* <Route path="tenants" element={<ManageTenants />} /> */}
+              <Route path="tenants" element={<ManageTenants />} />
+              <Route path="videos" element={<ManageVideos />} />
               <Route path="moderation" element={<Moderation />} />
-              {/* <Route path="analytics" element={<AnalyticsDashboard />} /> */}
-              {/* <Route path="processing" element={<ProcessingDashboard />} /> */}
-              {/* <Route path="settings" element={<AdminSystemSettings />} /> */}
+              <Route path="analytics" element={<AnalyticsDashboard />} />
+              <Route path="processing" element={<ProcessingDashboard />} />
+              <Route path="settings" element={<AdminSystemSettings />} />
             </Route>
           </Route>
         </Route>
@@ -130,7 +136,9 @@ function App() {
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} role={role} />
         <main id="main-content">
           <Suspense fallback={<SuspenseFallback />}>
-            <AnimatedRoutes isAuthenticated={isAuthenticated} role={role} getDashboardPath={getDashboardPath} />
+            <UploadQueueProvider>
+              <AnimatedRoutes isAuthenticated={isAuthenticated} role={role} getDashboardPath={getDashboardPath} />
+            </UploadQueueProvider>
           </Suspense>
         </main>
       </BrowserRouter>

@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, logout } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
   const handleAdminLogin = async (e) => {
@@ -16,7 +16,14 @@ const AdminLogin = () => {
     const password = e.target.password.value;
     
     try {
-      await login({ email, password });
+      const user = await login({ email, password });
+      
+      if (user.role !== 'admin') {
+        logout();
+        alert('Access Denied: This portal is strictly for administrators.');
+        return;
+      }
+      
       navigate(`/admin/dashboard`);
     } catch (error) {
       console.error('Login failed:', error);
@@ -69,7 +76,7 @@ const AdminLogin = () => {
                   name="email"
                   type="email"
                   required
-                  defaultValue="admin@vaultstream.com"
+                  defaultValue="vaultstream@gmail.com"
                   className="appearance-none block w-full px-4 py-3 border border-gray-300 bg-gray-50 text-gray-900 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all sm:text-sm"
                 />
               </div>
@@ -85,7 +92,7 @@ const AdminLogin = () => {
                   name="password"
                   type="password"
                   required
-                  defaultValue="adminpassword"
+                  defaultValue="1234567"
                   className="appearance-none block w-full px-4 py-3 border border-gray-300 bg-gray-50 text-gray-900 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all sm:text-sm"
                 />
               </div>

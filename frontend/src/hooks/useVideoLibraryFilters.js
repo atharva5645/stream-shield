@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useDebouncedValue from './useDebouncedValue';
 
@@ -87,12 +87,17 @@ const useVideoLibraryFilters = (videos) => {
     [searchParams],
   );
 
+  const lastSearchRef = useRef(debouncedSearch);
+
   useEffect(() => {
-    const nextParams = new URLSearchParams(searchParams);
-    if (debouncedSearch) nextParams.set('q', debouncedSearch);
-    else nextParams.delete('q');
-    nextParams.delete('page');
-    setSearchParams(nextParams, { replace: true });
+    if (lastSearchRef.current !== debouncedSearch) {
+      lastSearchRef.current = debouncedSearch;
+      const nextParams = new URLSearchParams(searchParams);
+      if (debouncedSearch) nextParams.set('q', debouncedSearch);
+      else nextParams.delete('q');
+      nextParams.delete('page');
+      setSearchParams(nextParams, { replace: true });
+    }
   }, [debouncedSearch, searchParams, setSearchParams]);
 
   useEffect(() => {

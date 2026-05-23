@@ -1,6 +1,18 @@
 import React from 'react';
 
 const SimpleLineChart = ({ title, subtitle, data, stroke = '#8b5cf6', fill = 'rgba(139, 92, 246, 0.12)' }) => {
+  if (!data || data.length === 0) {
+    return (
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-bold text-slate-950">{title}</h2>
+        <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+        <div className="mt-6 flex h-64 w-full items-center justify-center text-sm text-slate-400">
+          No data available
+        </div>
+      </div>
+    );
+  }
+
   const width = 520;
   const height = 220;
   const padding = 22;

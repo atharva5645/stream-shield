@@ -125,3 +125,16 @@ export const emitVideoReady = (io, userId, data) => {
     timestamp: new Date().toISOString(),
   });
 };
+
+/**
+ * Emit a general notification to a specific user
+ * @param {object} io - Socket.io server instance
+ * @param {string} userId - MongoDB User ID
+ * @param {object} notification - Notification object from DB
+ */
+export const emitNotification = (io, userId, notification) => {
+  io.to(`user_${userId}`).emit('new-notification', {
+    ...notification.toObject(),
+    timestamp: new Date().toISOString(),
+  });
+};

@@ -170,12 +170,17 @@ export const useUploadQueue = () => {
           uploadedBytes: nextQueuedItem.file.size,
           speedBytesPerSecond: nextQueuedItem.file.size / Math.max((performance.now() - startTime) / 1000, 1),
           etaSeconds: 0,
-          status: 'processing',
+          status: 'completed',
           remoteUrl: response.data?.video?.url || null,
           videoId: response.data?.video?._id || null,
         });
 
-        notifySuccess('Upload successful', `${nextQueuedItem.title} was successfully uploaded and is now processing.`, false);
+        notifySuccess('Upload successful', `${nextQueuedItem.title} was successfully uploaded and added to your library.`, false);
+        
+        // Auto-remove from the queue after 3 seconds so they can see it finished
+        setTimeout(() => {
+          removeFile(nextQueuedItem.id);
+        }, 3000);
       })
       .catch((error) => {
         controllersRef.current.delete(nextQueuedItem.id);
@@ -202,6 +207,8 @@ export const useUploadQueue = () => {
     if (!socket) return;
 
     const handleProcessingCompleted = (data) => {
+      const targetItem = queueRef.current.find((item) => item.videoId === data.videoId || (item.title && data.title && item.title === data.title));
+
       setQueue((currentQueue) =>
         currentQueue.map((item) => {
           if (item.videoId === data.videoId || (item.title && data.title && item.title === data.title)) {
@@ -214,6 +221,12 @@ export const useUploadQueue = () => {
           return item;
         })
       );
+
+      if (targetItem) {
+        setTimeout(() => {
+          removeFile(targetItem.id);
+        }, 3000);
+      }
     };
 
     const handleProcessingFailed = (data) => {

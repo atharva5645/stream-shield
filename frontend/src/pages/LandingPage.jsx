@@ -10,6 +10,8 @@ import AuthGateModal from '../components/auth/AuthGateModal';
 import { useAuth } from '../context/AuthContext';
 
 const Navbar = () => {
+  const { isAuthenticated, role, logout } = useAuth();
+  
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-surface/80 backdrop-blur-md border-b border-gray-200 transition-all duration-300">
       <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
@@ -20,8 +22,16 @@ const Navbar = () => {
           <span className="text-xl font-bold text-slate-900 tracking-tight">VaultStream</span>
         </div>
         <div className="flex items-center gap-4">
-          <Link to="/login" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Sign In</Link>
-          <Link to="/register" className="text-sm font-medium bg-[#0B1020] text-white px-4 py-2 rounded-full hover:bg-slate-800 transition-colors shadow-md">Get Started</Link>
+          {!isAuthenticated ? (
+            <>
+              <Link to="/login" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Sign In</Link>
+              <Link to="/register" className="text-sm font-medium bg-[#0B1020] text-white px-4 py-2 rounded-full hover:bg-slate-800 transition-colors shadow-md">Get Started</Link>
+            </>
+          ) : role === 'admin' ? (
+            <button onClick={logout} className="text-sm font-medium text-red-600 hover:text-red-700 transition-colors">Sign Out</button>
+          ) : (
+            <Link to={`/${role}/dashboard`} className="text-sm font-medium bg-[#0B1020] text-white px-4 py-2 rounded-full hover:bg-slate-800 transition-colors shadow-md">Go to Dashboard</Link>
+          )}
         </div>
       </div>
     </nav>
@@ -129,7 +139,7 @@ const FloatingDashboardMockup = () => {
 
 const LandingPage = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, role } = useAuth();
   const [publicVideos, setPublicVideos] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState(null);
@@ -192,9 +202,15 @@ const LandingPage = () => {
               >
                 Browse Library <ArrowRight className="w-4 h-4" />
               </button>
-              <Link to="/login" className="flex items-center gap-2 bg-white border border-gray-200 text-slate-700 px-6 py-3 rounded-full font-medium hover:bg-gray-50 transition-colors shadow-sm">
-                <Play className="w-4 h-4" /> Sign In
-              </Link>
+              {!isAuthenticated ? (
+                <Link to="/login" className="flex items-center gap-2 bg-white border border-gray-200 text-slate-700 px-6 py-3 rounded-full font-medium hover:bg-gray-50 transition-colors shadow-sm">
+                  <Play className="w-4 h-4" /> Sign In
+                </Link>
+              ) : role !== 'admin' && (
+                <Link to={`/${role}/dashboard`} className="flex items-center gap-2 bg-white border border-gray-200 text-slate-700 px-6 py-3 rounded-full font-medium hover:bg-gray-50 transition-colors shadow-sm">
+                  <Play className="w-4 h-4" /> Dashboard
+                </Link>
+              )}
             </div>
           </motion.div>
 

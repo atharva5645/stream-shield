@@ -11,7 +11,9 @@ const toneMap = {
 
 const ToastProvider = () => {
   const { notifications, remove } = useNotifications();
-  const toasts = notifications.slice(0, 4);
+  // Only show transient (non-sticky) notifications as floating toasts.
+  // Sticky notifications come from the backend DB and belong in the bell dropdown only.
+  const toasts = notifications.filter((n) => !n.sticky).slice(0, 4);
 
   return (
     <div className="pointer-events-none fixed right-4 top-4 z-[80] flex w-full max-w-sm flex-col gap-3">

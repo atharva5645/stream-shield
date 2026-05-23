@@ -41,6 +41,11 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    editorRequestStatus: {
+      type: String,
+      enum: ['none', 'pending', 'rejected'],
+      default: 'none',
+    },
   },
   {
     timestamps: true,

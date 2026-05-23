@@ -5,7 +5,17 @@ import api from '../../api/axios';
 
 const VideoCard = ({ video, onClick }) => (
   <div onClick={onClick} className="group relative flex-none w-52 xs:w-60 md:w-72 xl:w-80 aspect-video cursor-pointer overflow-hidden rounded-md bg-gray-800 shadow-lg transition-transform duration-300 hover:scale-105 hover:z-10 flex items-center justify-center">
-    {video.thumbnail ? (
+    {video.videoUrl ? (
+      <video 
+        src={video.videoUrl} 
+        className="h-full w-full object-cover opacity-80 transition-opacity group-hover:opacity-100" 
+        preload="metadata"
+        muted
+        loop
+        onMouseEnter={(e) => e.target.play().catch(() => {})}
+        onMouseLeave={(e) => { e.target.pause(); e.target.currentTime = 0; }}
+      />
+    ) : video.thumbnail ? (
       <img src={video.thumbnail} alt={video.title} className="h-full w-full object-cover opacity-80 transition-opacity group-hover:opacity-100" />
     ) : (
       <div className="flex items-center justify-center h-full w-full bg-slate-900 border border-slate-700">
@@ -41,8 +51,14 @@ const ViewerDashboard = () => {
       try {
         const { data } = await api.get('/videos');
         if (data.success) {
+          const baseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000';
           // Filter to only show 'completed' and 'safe' videos for viewers
-          const safeVideos = data.videos.filter(v => v.status === 'completed' && v.sensitivity === 'safe');
+          const safeVideos = data.videos
+            .filter(v => v.status === 'completed' && v.sensitivity === 'safe')
+            .map(video => ({
+              ...video,
+              videoUrl: `${baseUrl}/api/videos/stream/${video._id}`,
+            }));
           setVideos(safeVideos);
         }
       } catch (error) {
@@ -80,15 +96,7 @@ const ViewerDashboard = () => {
   return (
     <div className="min-h-screen bg-[#141414] text-white md:-mx-6 md:-mt-6 lg:-mx-8 lg:-mt-8">
       <div className="relative h-[58vh] min-h-[420px] w-full md:h-[70vh] bg-gray-900 border-b border-gray-800">
-        <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
-          {heroVideo.thumbnail ? (
-            <img src={heroVideo.thumbnail} alt={heroVideo.title} className="h-full w-full object-cover" />
-          ) : (
-            <Video size={100} className="text-gray-800 opacity-50" />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-r from-[#141414] via-[#141414]/80 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-transparent to-transparent" />
-        </div>
+
 
         <div className="absolute bottom-[12%] left-4 right-4 max-w-2xl xs:left-6 xs:right-6 md:bottom-[20%] md:left-12 md:right-auto z-10">
           <h1 className="mb-4 text-3xl font-bold drop-shadow-lg xs:text-4xl md:text-6xl">{heroVideo.title}</h1>
@@ -112,11 +120,11 @@ const ViewerDashboard = () => {
       </div>
 
       <div className="relative z-10 -mt-16 space-y-10 px-4 pb-24 xs:px-6 md:-mt-24 md:space-y-12 md:px-8 lg:px-12">
-        {videos.length > 0 && (
+        {remainingVideos.length > 0 && (
           <div>
             <h2 className="mb-4 text-xl font-bold text-gray-100">Organization Library</h2>
             <div className="scrollbar-hide flex gap-4 overflow-x-auto pb-4 snap-x">
-              {videos.map((video) => (
+              {remainingVideos.map((video) => (
                 <div key={video._id} className="snap-start">
                   <VideoCard video={video} onClick={() => handlePlay(video._id)} />
                 </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Mail, Calendar, Plus, Copy, Trash2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { User, Mail, Calendar, Plus, Copy, Trash2, AlertCircle, CheckCircle2, UploadCloud, PlayCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import BackButton from '../components/common/BackButton';
 
@@ -16,7 +16,8 @@ const SystemSettings = () => {
   ]);
   const [copiedId, setCopiedId] = useState(null);
   const [newKeyName, setNewKeyName] = useState('');
-  const { role } = useAuth();
+  const [isUpgrading, setIsUpgrading] = useState(false);
+  const { role, setAuthData, user } = useAuth();
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
@@ -39,6 +40,40 @@ const SystemSettings = () => {
       ...current,
     ]);
     setNewKeyName('');
+  };
+
+  const handleUpgrade = async () => {
+    try {
+      setIsUpgrading(true);
+      const { default: api } = await import('../api/axios');
+      const response = await api.put('/auth/upgrade');
+      if (response.data.success) {
+        // Update user context with the new request status
+        if (response.data.user) {
+          setAuthData(response.data.user, localStorage.getItem('token'));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to request creator access:', error);
+    } finally {
+      setIsUpgrading(false);
+    }
+  };
+
+  const handleDowngrade = async () => {
+    try {
+      setIsUpgrading(true);
+      const { default: api } = await import('../api/axios');
+      const response = await api.put('/auth/downgrade');
+      if (response.data.success) {
+        setAuthData(response.data.user, response.data.token);
+        window.location.href = '/viewer/dashboard';
+      }
+    } catch (error) {
+      console.error('Failed to downgrade role:', error);
+    } finally {
+      setIsUpgrading(false);
+    }
   };
 
   return (
@@ -70,9 +105,56 @@ const SystemSettings = () => {
 
         <div className="flex-1 bg-white border border-gray-200 rounded-2xl shadow-sm p-8">
           {activeTab === 'profile' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <input type="text" defaultValue="John Doe" className="border border-gray-300 rounded-lg px-4 py-2.5" />
-              <input type="email" defaultValue="john.doe@example.com" className="border border-gray-300 rounded-lg px-4 py-2.5" />
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Full Name</label>
+                  <input type="text" defaultValue={user?.name || "John Doe"} className="w-full border border-gray-300 rounded-lg px-4 py-2.5" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Email Address</label>
+                  <input type="email" defaultValue={user?.email || "john.doe@example.com"} className="w-full border border-gray-300 rounded-lg px-4 py-2.5" />
+                </div>
+              </div>
+              
+              <div className="pt-6 border-t border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Account Type</h3>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200 gap-4">
+                  <div>
+                    <p className="font-semibold text-gray-900 capitalize">{role} Account</p>
+                    <p className="text-sm text-gray-500">
+                      {role === 'viewer' 
+                        ? 'Upgrade to a Creator account to start uploading and managing your own videos.' 
+                        : 'Switch back to a Viewer account if you no longer need to upload videos.'}
+                    </p>
+                  </div>
+                  
+                  {role === 'viewer' && (
+                    <button 
+                      onClick={handleUpgrade}
+                      disabled={isUpgrading || user?.editorRequestStatus === 'pending'}
+                      className="shrink-0 flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      <UploadCloud size={18} />
+                      {user?.editorRequestStatus === 'pending' 
+                        ? 'Request Pending...' 
+                        : isUpgrading 
+                          ? 'Requesting...' 
+                          : 'Request Creator Access'}
+                    </button>
+                  )}
+                  {role === 'editor' && (
+                    <button 
+                      onClick={handleDowngrade}
+                      disabled={isUpgrading}
+                      className="shrink-0 flex items-center justify-center gap-2 rounded-lg bg-white border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      <PlayCircle size={18} />
+                      {isUpgrading ? 'Switching...' : 'Switch to Viewer'}
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           ) : null}
 
